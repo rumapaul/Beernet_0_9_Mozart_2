@@ -1,0 +1,13 @@
+The following video has been made by Matthieu Ghilain. He tested Beernet to
+bootstrap a network of 10 peers, each of them on its own unix process. The
+bootstrapping process works well, but the access to the data hangs from time
+to time... and it does it too often.
+
+There is also a small java application that interacts with beernet, and
+because the query hangs, the application hangs as well.
+
+The video is in the following URL:
+
+http://www.youtube.com/watch?v=YJtqverGLE4
+
+We really need to try to identify the source of the suspention and fix it.

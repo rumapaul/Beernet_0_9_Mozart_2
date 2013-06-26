@@ -1,0 +1,59 @@
+%%-------------------------------------------------------------------------
+ %
+ % commands.tex
+ %
+ %    General latex commands for Beernet's documentation.
+ %
+ % LICENSE
+ %
+ %    Beernet is released under the Beerware License (see file LICENSE) 
+ % 
+ % IDENTIFICATION 
+ %
+ %    Author: Boriss Mejias <boriss.mejias@uclouvain.be>
+ %
+ %    Last change: $Revision: 403 $ $Author: boriss $
+ %
+ %    $Date: 2011-05-19 21:45:21 +0200 (Thu, 19 May 2011) $
+ %
+%%-------------------------------------------------------------------------
+
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{epsfig}
+\usepackage{subfig}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{url}
+
+\graphicspath{{figs/}}
+
+\newcommand{\comment}[1]{}
+\newcommand{\ignore}[1]{}
+\renewcommand{\labelenumii}{\alph{enumii}}
+
+\definecolor{commentcolor}{gray}{0.4}
+\definecolor{keywordcolor}{rgb}{0.0,0.4,0.0}
+\lstset{
+	emph={for, do, define},emphstyle=\color{keywordcolor}\bfseries,
+	language=Oz,
+	tabsize=4,
+	columns=fullflexible,
+	%basicstyle=\footnotesize\fontfamily{ppl},
+	basicstyle=\small\fontfamily{ppl},
+	keywordstyle=\color{keywordcolor}\bfseries,
+	identifierstyle=\color{black}\fontfamily{phv}\selectfont,
+	commentstyle=\color{commentcolor}\textit,
+	stringstyle=\ttfamily,
+	showstringspaces=false
+	%numbers=left
+	%numberstyle=\tiny
+}
+\newcommand{\code}[1]{\lstinline[language=Oz]{#1}}
+
+\usepackage[plainpages=false,
+			colorlinks,
+			citecolor=black,
+			linkcolor=blue,
+			urlcolor=blue]{hyperref}
+

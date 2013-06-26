@@ -1,0 +1,27 @@
+Peter Van Roy wrote:
+> Hi Boris,
+>
+> The talk at UPMC went well.  There were lots of people present, from several Parisian universities.  There were some very good questions asked about the transactional store:
+>
+> 1. How can we do GC for the objects (key/value pairs) in the transactional store?  Currently, memory management for these objects is completely manual: they don't go away until the application programmer deletes them.  On the other hand, distributed garbage collection is very difficult and maybe theoretically impossible to achieve if node failures are possible.  Is there a simple way to extend the transactional store to do automatic memory management?  That is, we need to keep track of the external references to the keys on all the sites.  Maybe there is a way to reduce the strong consistency requirement of a complete garbage collection to get a practical solution?  (A general comment was that relaxing the strong consistency is an approach that will probably be used more and more in large-scale distributed systems.)
+
+It's true that relaxing strong consistency is gaining more and more popularity. We have to keep this in mind. About garbage collection. Yes, it's very very difficult. And sometimes it doesn't even make sense. For instance, consider the applications that store data as if was a disk that should be available any time in the future. Think of wikipedia articles. When can you decide to delete some old version of an article? It's more an application policy instead of a garbage collection issue.
+
+OpenDHT's API has an extra parameter for put(key, value, time), where time indicates for how long should the key/value pair be stored. That's a very simply way of cleaning up the DHT, but it's not really garbage collection.
+
+> 2. Here is a very interesting measurement you can perform regarding elasticity.  Assume that your application is running at a given load of transactions/second and all of a sudden there is a flash crowd.  So you add nodes to Beernet to increase performance.  But while you are adding the nodes, Beernet has to join them, update the routing tables, and move the replicas.  This will temporarily slow things down (routing will be slower, transactions will be slower, some transactions might abort, etc.)!  This is exactly the opposite effect from what you want, but it is temporary.  So how fast should new nodes be added to minimize the speed decrease, while still keeping a fast reaction to flash crowds?  You can have a running Beernet with a given load.  Then you increase the load, and start adding new nodes.  You can measure the transitory performance of Beernet while the nodes are being added, until the system stabilizes again.  There may be a decrease in performance temporarily as Beernet is occupied with joining, updating finger tables, and moving replicas.  A badly designed system will oscillate if it reacts too quickly to this temporary reduction in performance.  How can one improve the design so that it will react quicker and better to flash crowds?
+
+This is indeed a very good experiment. In fact, when a peer joins, it needs to run several transactions to retrieve the data it will become responsible for. One way of making this process shorter would be to assign priorities to transactions, where "joining transactions" will have higher priority. This would be related to the priorities we were discussing on Tuesday to prevent deadlocks.
+
+> 3. Comparing symmetric replication to other schemes such as erasure codes (for example, as used in Wuala).  I explained that erasure codes work well for stores that do mostly reads and few writes, because writes are expensive (all the file fragments need to be updated).
+
+Ok, I'll have to study erasure codes.
+
+cheers
+Boriss
+
+>
+> Peter
+>
+>
+

@@ -1,0 +1,67 @@
+/*-------------------------------------------------------------------------
+ *
+ *    Beernet is released under the Beerware License (see file LICENSE) 
+ * 
+ *    $Date: 2011-05-23 12:03:08 +0200 (Mon, 23 May 2011) $
+ *
+ *-------------------------------------------------------------------------
+ */
+
+Beernet-0.9
+
+	New functionality
+	- Adding subcommand stop to beernet tool
+	- Adding secrets to protect data updates on all three data abstractions
+	- Eager data migration on join
+	- Experimental API with Java using plain ASCII socket communication
+
+	Fixes
+	- In beernet --dist=cluster fixed 
+	- Bulk and QuickBulk uses the hash key, not the high level key
+	- Dead ports don't raise exceptions running with Mozart 1.3.2
+	- And several minor bug fixes 
+
+Beernet-0.8
+	- Symmetric replication layer provides a replication set for quick bulk
+	- Finger table can be explicitly refreshed
+	- First performance test achieved
+	- Command line tools added: beernet and pbeer
+	- New directory structure from docsrc, src and tools to doc, lib and bin
+	- Better Makefile support with make install
+	- Several bug fixes
+
+Beernet-0.7
+	- Trappist provides add/remove/read set operations (alfa)
+	- Trappist provides Paxos Consensus Algorithm
+	- Trappist provides Two-Phase Commit
+	- DHT supports basic set operations: add(k v), remove(k v), readSet(k)
+	- And the usual bug fixes here and there
+
+Beernet-0.6
+	- Symmetric Replication provides now getAll(Key) and getMajority(Key)
+	- Change on Replication API: quickRead becomes getOne
+
+Beernet-0.5
+	- Symmetric Replication provides Bulk operations and QuickRead
+	- Several bug fixes
+	- License upgrade: Using Beerware instead of MIT/X11 (Keeping No Warranty)
+
+Beernet-0.4
+	- DHT functionality: put/get/delete
+	- SimpleDB component used by the DHT layer
+	- Lookup functionality added to Relaxed-Ring Node. Accesible through Pbeer
+	- Refactoring of the directory organization. More modular now
+
+Beernet-0.3
+	- Messaging layer working correctly
+	- New functionalitites added to Pbeer: send and receive
+
+Beernet-0.2
+	- Finger table for logarithmic routing added
+	- Several bug fixes to the previously released modules
+	- Test for creating a pbeer-to-pbeer network running
+
+Beernet-0.1
+	- Core component model
+	- Basic modules logger, network, timer, utils
+	- Basic functionality of the relaxed-ring for joining and failure recovery

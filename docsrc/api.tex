@@ -1,0 +1,292 @@
+%%-------------------------------------------------------------------------
+ %
+ % api.tex
+ %
+ %    API of a pbeer. It documents the available events of a pbeer
+ %
+ % LICENSE
+ %
+ %    Beernet is released under the Beerware License (see file LICENSE) 
+ % 
+ % IDENTIFICATION 
+ %
+ %    Author: Boriss Mejias <boriss.mejias@uclouvain.be>
+ %
+ %    Last change: $Revision: 403 $ $Author: boriss $
+ %
+ %    $Date: 2011-05-19 21:45:21 +0200 (Thu, 19 May 2011) $
+ %
+%%-------------------------------------------------------------------------
+ 
+
+\documentclass[11pt]{article}
+
+\input{commands}
+
+\title{Beernet's API}
+
+\author{Boris Mej\'{i}as}
+
+\date{May 31, 2011}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\begin{quote}
+
+{\bf WARNING!} This document corresponds to the API of Beernet-0.8. It does
+not integrate the new API with secrets, but Beernet-0.9 is still compatible with
+this document.
+
+\end{quote}
+
+Beernet is provided as a Mozart-Oz\footnote{The Mozart Programming System,
+\url{http://www.mozart-oz.org}} library. To use it, the program needs to
+import the main functor to create a peer to bootstrap a network, or to join an
+existing one using the reference of another peer. Importing the main functor
+and creating a new peer works as follows:
+
+\begin{lstlisting}
+	functor
+	import
+		Beernet at 'beernet/pbeer/Pbeer.ozf'
+	define
+		Pbeer = {Beernet.new args(transactions:true)}
+\end{lstlisting}
+
+Interacting with the peer is done by triggering an event as follows:
+
+\begin{lstlisting}
+	{Pbeer event(arg1 ... argn)}
+\end{lstlisting}
+
+We list now the different events that can be triggered on Beernet's peers.
+Even though Beernet's architecture is organized with layers where Trappist is
+the upper most one, the architecture does not prevent the access to lower
+layers because their functionality is important to implement applications.
+
+\section{Relaxed Ring}
+
+The following events can be used to get access to the functionality provided
+by the relaxed ring layer. It mostly provides access to peer's pointers and
+other information of the structured overlay network. 
+
+\subsection{Basic Operations}
+
+\begin{itemize}
+
+	\item \code{join(RingRef)} Triggers joining process using \code{RingRef}
+as access point.
+
+	\item \code{lookup(Key)} Triggers lookup for the responsible of
+\code{Key}, which will be passed through the hash function.
+
+	\item \code{lookupHash(HashKey)} Triggers lookup for the responsible of
+\code{HashKey} without passing \code{HashKey} through the hash function.
+
+	\item \code{leave} Roughly quit the network. No gently leave implemented.
+ 
+\end{itemize}
+
+\subsection{Getting Information}
+
+\begin{itemize}
+
+\item \code{getId(?Res)}\\ Binds \code{Res} to the id of the peer
+
+\item \code{getRef(?Res)}\\ Binds \code{Res} to a record containing peer's
+reference with the pattern\\ \code{pbeer(id:<Id> port:<Port>)}
+
+\item \code{getRingRef(?Res)}\\ Binds \code{Res} to the ring reference
+
+\item \code{getFullRef(?Res)}\\ Binds \code{Res} to a record containing peer's
+reference and ring's reference with the pattern \code{ref(pbeer:<Pbeer Ref>
+ring:<Ring Ref>)} 
+
+\item \code{getMaxKey(?Res)}\\ Binds \code{Res} to the maximum key in ring's
+address space
+
+\item \code{getPred(?Res)}\\ Binds \code{Res} to the reference of peer's
+predecessor
+
+\item \code{getSucc(?Res)}\\ Binds \code{Res} to the reference of peer's
+successor
+
+\item \code{getRange(?Res)}\\ Binds \code{Res} to the responsibility range of
+peer with the pattern \code{From#To}, where \code{From} and \code{To} are
+integers keys.
+
+\end{itemize}
+
+\subsection{Other Events}
+
+\begin{itemize}
+
+\item \code{refreshFingers(?Flag)} Triggers lookup for ideal keys of finger
+table to refresh the routing table. Binds \code{Flag} when all lookups are
+replied.
+
+\item \code{injectPermFail} Peer stop answering any message. 
+
+\item \code{setLogger(Logger)} Sets Logger as the default service to log
+information of the peer. Mostly used for testing and debugging.
+
+\end{itemize}
+
+\section{Message Sending}
+
+This section describe the events that allow applications to send and receive
+messages to other peers.
+
+\begin{itemize}
+
+\item \code{send(Msg to:Key)}\\ Sends message \code{Msg} to the responsible of
+key \code{Key}.
+ 
+\item \code{dsend(Msg to:PeerRef)}\\ Sends a direct message \code{Msg} to a
+peer using \code{PeerRef}.
+
+\ignore{ 
+\item \code{broadcast(Msg range:Range)}\\ Sends message \code{Msg} to all
+peers on the range \code{Range}, which can be \code{all}, sending to the whole
+ring, \code{butMe}, sending to all ring except for the sender, and
+\code{From#To}, which sends to all peers having an identifier within keys
+\code{From} and \code{To}, so it can be used as a multicast.
+}
+
+\item \code{receive(?Msg)}\\ Binds \code{Msg} to the next message received by
+the peer, and that it has not been handled by any of Beernet's layer. It
+blocks until next message is received. 
+
+\end{itemize}
+
+\section{DHT}
+
+Beernet also provides the basic operations of a distributed hash table (DHT).
+None of this uses replication, therefore, there are no guarantees about
+persistence.
+
+\begin{itemize}
+
+\item \code{put(Key Val)}\\ Stores the value \code{Val} associated with key
+\code{Key}, only in the peer responsible for the key resulting from applying
+the hash function to key \code{Key}.
+
+\item \code{get(Key ?Val)}\\ Binds \code{Val} to the value stored with key
+\code{Key}. It is bound to the atom \code{'NOT_FOUND'} in case that no value
+is associated with such key.
+
+\item \code{delete(Key)}\\ Deletes the item associated to key \code{Key}.
+
+\end{itemize}
+
+\section{Symmetric Replication}
+
+The symmetric replication layer does not provides an interface to store values
+with replication, but it does provides some functions to retrieve replicate
+data, and to send messages to replica-sets.
+
+\begin{itemize}
+
+\item \code{bulk(Msg to:Key)}\\ Sends message \code{Msg} to the replication
+set associated to key \code{Key}.
+
+\item \code{getOne(Key ?Val)}\\ Binds \code{Val} to the first answer received
+from any of the replicas of the item associated with key \code{Key}. If value
+is \code{'NOT_FOUND'}, the peer does not bind \code{Val} until it gets a valid
+value, or until all replicas has replied \code{'NOT_FOUND'}. 
+
+\item \code{getAll(Key ?Val)}\\ Binds \code{Val} to a list containing all
+values stored in the replica set associated to key \code{Key}.
+
+\item \code{getMajority(Key ?Val)}\\ Binds \code{Val} to a list containing
+the values from the replica set associated to key \code{Key}. It binds
+\code{Val} as soon as the majority is reached.
+
+\end{itemize}
+
+\section{Trappist}
+
+Trappist provides different protocols to run transactions on replicated items.
+Due to their specific behaviour, they have different interfaces.
+
+\subsection{Paxos Consensus}
+
+\begin{itemize}
+
+\item \code{runTransaction(Trans Client Protocol)}\\ Run the transaction
+\code{Trans} using protocol \code{Protocol}. The answer, \code{commit} or
+\code{abort} is sent to the port \code{Client}. Currently, the protocols
+supported by this interface are \code{twophase} and \code{paxos}, for
+two-phase commit and Paxos consensus with optimistic locking. For eager
+locking, see the interface in Section~\ref{apx:beernet:eager-locking}.
+
+\item \code{executeTransaction(Trans Client Protocol)}\\ Exactly the same as
+\code{runTransaction}. Kept only for backward compatibility.
+
+\end{itemize}
+
+Inside a transaction, there are three operations that can be used to
+manipulate data.
+
+\begin{itemize}
+
+\item \code{write(Key Val)}\\ Write value \code{Val} using key \code{Key}. The
+new value is stored at least in the majority of the replicas. Updating the
+value gives a new version number to the item.
+
+\item \code{read(Key ?Val)}\\ Binds \code{Val} to the latest value associated
+to key \code{Key}. Strong consistency is guaranteed by reading from the
+majority of the replicas. 
+
+\item \code{remove(Key)}\\ Removes the item associated to key \code{Key} from
+the majority of the replicas.
+
+\end{itemize}
+
+\subsection{Paxos with Eager Locking}
+\label{apx:beernet:eager-locking}
+
+\begin{itemize}
+
+\item \code{getLocks(Keys ?LockId)}\\ Get the locks of the majority of
+replicas of all items associated to the list of keys \code{Keys}. Binds
+\code{LockId} to an Oz name if locks are successfully granted, and to
+\code{error} otherwise.
+
+\item \code{commitTransaction(LockId KeyValuePairs)} update all items of the
+list \code{KeyValuePairs} which must be locked using \code{LockId}. Each
+element of the list \code{KeyValuePairs} must be of the form
+\code{<key>#<value>}
+
+\end{itemize}
+
+\subsection{Notification Layer}
+
+\begin{itemize}
+
+\item \code{becomeReader(Key)}\\ Subscribes the current peer to be notified
+about locking and updates of the item associated to key \code{Key}.
+Notification are received using the \code{receive} event described previously.
+
+\end{itemize}
+
+\subsection{Key/Value-Sets}
+
+\begin{itemize}
+
+\item \code{add(Key Val)}\\ Adds the value \code{Val} to the set associated to
+key \code{Key}.
+
+\item \code{remove(Key Val)}\\ Removes value \code{Val} from the set associated
+to key \code{Key}.
+
+\item \code{readSet(Key ?Val)}\\ Binds \code{Val} to a list containing all
+elements from the set associated to key \code{Key}. 
+
+\end{itemize}
+
+\end{document}

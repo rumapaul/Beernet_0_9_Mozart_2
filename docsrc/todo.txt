@@ -1,0 +1,32 @@
+/*-------------------------------------------------------------------------
+ *
+ *    Beernet is released under the Beerware License (see file LICENSE) 
+ * 
+ *    $Date: 2011-05-19 21:45:21 +0200 (Thu, 19 May 2011) $
+ *
+ *-------------------------------------------------------------------------
+ */
+
+Implementation
+===========================================================================
+
+- Refresh Fingers: Explicit to event to trigger a search for best fingers
+
+- New Node Ref: Propagate the change of a new pbeer reference to all
+  components having a reference to it. This is part of the design is not so
+nice, because the value of the NodeRef is duplicated in every object that
+needs it, instead of managing in a single place from which all components
+should read. The reason is simply for performance. Ideally, it should be
+redesign to avoid state duplication without sacrificing performance. This is a
+long task. 
+
+- Make a timer component that can be referenced from all objects that needs
+  it, and prevent creating too many threads.
+
+Documentation 
+===========================================================================
+
+- Add Trappist components to the architecture diagram. We are implementing
+  Beernet-0.8, and the architecture still shows Beernet-0.6
+
+- Document nicely the API

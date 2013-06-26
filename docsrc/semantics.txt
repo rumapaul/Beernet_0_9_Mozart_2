@@ -1,0 +1,24 @@
+This document contains a brief description of the semantics of Beernet storage
+operations. The work is done in collaboration with Xavier De Coster and
+Matthieu Ghilan, master students. We have designed semantics for adding
+secrets to items. The idea is to keep the interface as much backward
+compatible with the previous versions of Beernet.
+
+(To be completed with the text of the students)
+
+Basic DHT operations: put/get/delete
+Transactional operations: write/read/destroy
+Set operations: createSet/add/remove/readSet/destroySet
+
+The development is being carried on the branch clear-semantics. What has to be
+done is the following:
+
+- Fix the problems of mixing value types. Currently, applying a put/get
+  operation over a set will crash the node. Those kind of problems must be
+removed.
+
+- Add secrets to the interface of all operators, according to the new
+  semantics.
+
+- Now all operations return a future value that will be bound to the result of
+  the operation

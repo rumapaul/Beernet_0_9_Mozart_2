@@ -1,0 +1,11 @@
+These are some initial ideas on the implementation of BeerNet.
+
+I am planning to implement BeerNet using a similar strategy to the
+peer-to-peer network built with Kompics. Their component architecture can be
+found in the file p2p-arch.pdf. This architecture is only a starting point for
+BeerNet. The goal is to combine it with our experience on p2psv3, which was
+organized with different tiers. The disadvantage of the implementation of the
+tiers is that they were organized as a static composition of classes. By using
+components, we will be able to dynamically replace some components, and
+"compose" them easily.
+

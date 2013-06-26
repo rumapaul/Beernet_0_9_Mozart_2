@@ -1,0 +1,50 @@
+This is the template header that is recomended to be used for source code
+files. Don't forget to add the keyword properties to the file by doing (of
+course, replace Filename.oz by the corresponding filename)
+
+svn propset svn:keywords "Date Author Revision" Filename.oz
+
+/*-------------------------------------------------------------------------
+ *
+ * Filename.oz
+ *
+ *    Short Description
+ *
+ * LICENSE
+ *
+ *    Beernet is released under the Beerware License (see file LICENSE) 
+ * 
+ * IDENTIFICATION 
+ *
+ *    Author: (main author)
+ *
+ *    Contributors: (if any)
+ *
+ *    Last change: $Revision$ $Author$
+ *
+ *    $Date$
+ *
+ * NOTES
+ *      
+ *    Here it comes a better explanation about what the code does.
+ *
+ * EVENTS
+ *
+ *    Accepts: eventName(arg1 argN) - Events that can be triggered on this
+ *    component to request a service.
+ *
+ *    Confirmation: eventName(arg1 argN) - Events used by a component to
+ *    confirm the completion of a request.
+ *
+ *    Indication: eventName(arg1 argN) - Events used by a given component to
+ *    deliver information to another component
+ *    
+ *-------------------------------------------------------------------------
+ */
+
+
+The following two lines are meant for the Tester.oz file on every directory
+
+%% This file is meant to test the functionality of the functors implemented on
+%% this module.
+
