@@ -6,7 +6,7 @@
 
 declare
 
-SIZE=15
+SIZE=8
 
 {Property.put 'print.width' 1000}
 {Property.put 'print.depth' 1000}
@@ -113,7 +113,6 @@ thread
    proc{MarkEdge S T}
       OM NM
    in
-      %{System.showInfo "in MarkEdge"}
       OM=MarkedEdges:=NM
       if {Not {List.member S#","#T OM}} then
          if {List.member S#","#T @FailedLinks} then
@@ -172,16 +171,13 @@ thread
           if Round \= N then
                 CurrentNodes = {LoopNetwork Start First M Last}
                 FNodes := {List.append @FNodes CurrentNodes}
-                %{System.showInfo "in Collect Round1"#@FNodes#" All"#@AlivePbeers}
                 RestNodes = {ListMinus @AlivePbeers @FNodes}%Remove only CurrentNodes 4 both-way failure
                 in
                 {ForAll CurrentNodes 
                        proc {$ Current}
 	                  for P in RestNodes do
-                              %{System.showInfo "Marking:"#Current.id#"to"#{P getId($)}}
                               {MarkEdge Current.id {P getId($)}} 
                           end
-                          %{MarkEdge Current.id {First getId($)}}
                        end
                  }
                  {CollectRound @Last M First Last Round+1 FNodes}
@@ -330,10 +326,10 @@ in
                                                 if {Not {List.member A @FailedLinks}} then
                                                      case A of
                                                      F#","#T then
-                                                         {AddFailedLink F T} 
+                                                         {AddFailedLink F T}
+                                                         {UnMarkEdge F T} 
 						         FromPbeer = {GetPbeer F}
-					                 in
-                                                         {UnMarkEdge F T}  
+					                 in  
 					                 {FromPbeer injectLinkFail(T)}
                                                      else
                                                          skip
@@ -345,10 +341,10 @@ in
                                                 if {List.member A @FailedLinks} then
                                                      case A of
                                                      F#","#T then
-                                                         {RestoreFailedLink F T} 
+                                                         {RestoreFailedLink F T}
+							 {UnMarkEdge F T} 
 						         FromPbeer = {GetPbeer F}
-					                 in
-                                                         {UnMarkEdge F T}  
+					                 in  
 					                 {FromPbeer restoreLink(T)}
                                                      else
                                                          skip
@@ -397,11 +393,6 @@ in
                  end
                end)}
 
-
-%   {O onRightClick(...)}
-%   {O runToEnd}
-   
-%   {Viewer.drawLog S c(green:false red:false blue:false gray:true)} %{Port.new $ LoggerPort}}
 
    %% green are session handshaking messages
    %% red are sideband direct messages
@@ -515,10 +506,8 @@ end
       ComLayer = {Network.new}
    end
 in
-   TotalLogMessages = {NewCell nil}
-   TotalLogMessages := 0
-   NetworkSize = {NewCell nil}
-   NetworkSize := SIZE
+   TotalLogMessages = {NewCell 0}
+   NetworkSize = {NewCell SIZE}
    Pbeers = {NewCell nil}
    AlivePbeers = {NewCell nil}
    {TestCreate}	
