@@ -45,6 +45,7 @@ import
    RingList    at '../../utils/RingList.ozf'
    TimerMaker  at '../../timer/Timer.ozf'
    Utils       at '../../utils/Misc.ozf'
+   PeriodicStabilizer at 'PeriodicStabilizer.ozf'
 export
    New
 define
@@ -72,6 +73,7 @@ define
       PredList    % To remember peers that haven't acked joins of new preds
       Ring        % Ring Reference ring(name:<atom> id:<name>)
       FingerTable % Routing table 
+      SelfStabilizer  % Periodic Stalizer
       Self        % Full Component
       SelfRef     % Pbeer reference pbeer(id:<Id> port:<Port>)
       Succ        % Reference to the successor
@@ -158,6 +160,28 @@ define
          end
       end
 
+      proc {Update CandidatePbeer}
+        if {Not {PbeerList.isIn CandidatePbeer @Crashed}} then
+            if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id} then
+                OldSucc = @Succ.id
+                in
+	        Succ := CandidatePbeer
+                {Monitor CandidatePbeer}
+                {@FingerTable monitor(CandidatePbeer)}
+                {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+            elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
+                OldPred = @Pred.id
+                in
+                 PredList := {AddToList CandidatePbeer @PredList}
+                 Pred := CandidatePbeer 
+                 {Monitor CandidatePbeer}
+                 {@FingerTable monitor(CandidatePbeer)}
+                 {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
+                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: Check
+            end
+        end 
+      end
+
 /*
       proc {UnregisterPeers Peers}
          {RingList.forAll Peers
@@ -201,7 +225,6 @@ define
             Succ := Pbeer
             {Monitor Pbeer}
             {@FingerTable monitor(Pbeer)}
-            %SuccList := {UpdateList @SuccList Pbeer nil}
             {Zend @Succ fix(src:@SelfRef)}
             {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
          end 
@@ -265,24 +288,18 @@ define
       proc {Fix fix(src:Src)}
 	OldPred = @Pred.id
 	in
-         
-         %{System.showInfo "In Fix:"#@Pred.id#" "#Src.id}
-         
          %% Src thinks I'm its successor so I add it to the predList
          PredList := {AddToList Src @PredList}
          {Monitor Src}
          if {PbeerList.isIn @Pred @Crashed} then
-            %{System.showInfo "Pred crashed"}
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
             {Monitor Src}
             {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
             {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
          elseif {BelongsTo Src.id @Pred.id @SelfRef.id-1} then
-            %{System.showInfo "Better Pred"}
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
-            %{Zend Src predFound(pred:Src last:true) Self}
             {Monitor Src}
             {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
             {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
@@ -461,6 +478,19 @@ define
          end
       end
 
+      proc {RetrievePred retrievePred(src:Src psucc:PSucc)}
+         %{System.showInfo "In RetrievePred"}
+ 	 {Zend Src retrievePredRes(src:@SelfRef
+                                  succp:@Pred
+                                  succList:@SuccList)}
+         {Update Src}
+      end
+
+      proc {RetrievePredRes retrievePredRes(src:Src succp:SuccP succList:SuccSL)}
+         {Update SuccP}
+         {UpdSuccList updSuccList(src:Src succList:SuccSL counter:SLSize)}
+      end
+
       proc {Route Event}
          Msg = Event.msg
 	 Target = Event.to
@@ -499,6 +529,12 @@ define
 	Logger := NewLogger
          %{@ComLayer Event}
 	 {@ComLayer setLogger(NewLogger)}
+      end
+
+      proc {Stabilize stabilize}
+         %{System.showInfo "In Stabilization"}
+         {Zend @Succ retrievePred(src:@SelfRef
+                                  psucc:@Succ)}
       end
 
       proc {StartJoin startJoin(succ:NewSucc ring:RingRef)}
@@ -557,8 +593,11 @@ define
                   predNoMore:    PredNoMore
                   route:         Route
                   refreshFingers:ToFingerTable
+                  retrievePred:  RetrievePred
+                  retrievePredRes:RetrievePredRes 
                   setFingerTable:SetFingerTable
                   setLogger:     SetLogger
+                  stabilize:     Stabilize
                   startJoin:     StartJoin
                   updSuccList:   UpdSuccList
                   )
@@ -594,6 +633,10 @@ define
       end
       SelfRef := {Record.adjoinAt @SelfRef port {@ComLayer getPort($)}}
       {@ComLayer setId(@SelfRef.id)}
+
+      SelfStabilizer = {PeriodicStabilizer.new}
+      {SelfStabilizer setComLayer(@ComLayer)}
+      {SelfStabilizer setListener(Self)}
 
       Pred        = {NewCell @SelfRef}
       Succ        = {NewCell @SelfRef}
