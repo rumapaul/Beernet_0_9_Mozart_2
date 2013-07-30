@@ -33,7 +33,7 @@ import
    Component   at '../../corecomp/Component.ozf'
    RlxRing     at 'RlxRing.ozf'
    FingerTable at 'FingerTable.ozf'
-   System
+   
 export
    New
 define
@@ -53,7 +53,6 @@ define
       end
 
       proc {InjectLinkFail injectLinkFail(ToPbeerId)}
-         %{System.showInfo "In Node "#{ToPbeer getId($)}}
 	 {ComLayer signalALinkFailure(ToPbeerId)}
       end
 
@@ -62,7 +61,6 @@ define
       end
 
       proc {InjectLinkDelay injectLinkDelay}
-         %{System.showInfo "In Node"}
          {ComLayer signalLinkDelay}
       end
 
