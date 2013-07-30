@@ -68,7 +68,8 @@ define
       end
 
       proc {Send Event}
-         send(Msg to:Target ...) = Event
+         Msg = Event.1
+         Target = Event.to
          %% Other args: responsible (resp), outcome (out)
          Resp
          Outcome
