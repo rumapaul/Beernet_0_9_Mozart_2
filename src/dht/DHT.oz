@@ -141,7 +141,11 @@ define
       end
 
       proc {DeleteItem Event}
-         deleteItem(hk:HKey k:Key s:Secret gid:Gid src:Src ...) = Event
+         HKey = Event.hk
+         Key = Event.k
+         Secret = Event.s
+         Gid = Event.gid
+         Src = Event.src
          Result
       in
          {@DB delete(HKey Key Secret Result)}
@@ -164,7 +168,12 @@ define
       end
 
       proc {PutItem Event}
-         putItem(hk:HKey k:Key v:Val s:Secret gid:Gid src:Src ...) = Event
+         HKey = Event.hk
+         Key = Event.k
+         Val = Event.v
+         Secret = Event.s
+         Gid = Event.gid
+         Src = Event.src
          Result
       in
          {@DB put(HKey Key Val Secret Result)}
