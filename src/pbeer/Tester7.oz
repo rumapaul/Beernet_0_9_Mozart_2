@@ -6,9 +6,13 @@
 %% Refreshing scheme of links among nodes
 %% Churn Script(Churn parameter: % of node turnover per time unit per node)
 
+%% New Modifications
+%% Changed List operations
+
+
 declare
 
-SIZE = 8
+SIZE = 12
 TIMEUNIT = 5000 %%in milliseconds
 
 {Property.put 'print.width' 1000}
@@ -53,32 +57,33 @@ thread
    PartitionedLinks={NewCell nil}
 
    proc{AddFailedLink S T}
-      OM NM
+      L E
    in
-      OM=FailedLinks:=NM
-      if {List.member S#","#T @MarkedEdges} then
+      L=@FailedLinks
+      E=S#","#T
+      if {List.member E @MarkedEdges} then
          {O removeEdge(S T black)}
       else
 	 {O removeEdge(S T gray)}
          {O addEdge(S T red)}
       end
-      NM=S#","#T|OM
+      FailedLinks:=E|L
    end
 
    proc{AddPartitionedLink S T}
       if {Not {List.member S#","#T @PartitionedLinks}} then
-         OM NM
+         L
          in
-         OM=PartitionedLinks:=NM
-         NM=S#","#T|OM
+         L=@PartitionedLinks
+         PartitionedLinks:=S#","#T|L
       end
    end
 
   proc{RemovePartitionedLink S T}
-      OM NM
+      L
    in
-      OM=PartitionedLinks:=NM
-      NM={List.subtract OM S#","#T}
+      L=@PartitionedLinks
+      PartitionedLinks:={List.subtract L S#","#T}
   end
 
    proc{RemoveAllFailedLinks}
@@ -99,87 +104,81 @@ thread
    end
 
    proc{RestoreFailedLink S T}
-      OM NM E L
+      E L
    in
       E = S#","#T
       L = @FailedLinks
-      OM=FailedLinks:=NM
-      if {List.member S#","#T @MarkedEdges} then
+      if {List.member E @MarkedEdges} then
          {O removeEdge(S T darkblue)}
       else
 	 {O removeEdge(S T red)}
          {O addEdge(S T gray)}
       end
-      %NM={List.subtract OM S#","#T}
       FailedLinks:={List.subtract L E}
    end
 
    proc{Mark P}
-      OM NM
+      L
    in
-      OM=MarkedNodes:=NM
-      if {Not {List.member P OM}} then
+      L = @MarkedNodes
+      if {Not {List.member P L}} then
 	 Info={O getNodeInfo({P getId($)} $)}
-      in
+         in
 	 {Info.canvas tk(itemconfigure Info.box width:3)}
-	 NM=P|OM
-      else
-	 NM=OM
+	 MarkedNodes:=P|L
       end
    end
 
    proc{MarkEdge S T}
-      OM NM
+      L E
    in
-      OM=MarkedEdges:=NM
-      if {Not {List.member S#","#T OM}} then
-         if {List.member S#","#T @FailedLinks} then
+      L=@MarkedEdges
+      E = S#","#T
+      if {Not {List.member E L}} then
+         if {List.member E @FailedLinks} then
                {O removeEdge(S T red)}
                {O addEdge(S T darkblue)}
          else     
 	       {O removeEdge(S T gray)}
                {O addEdge(S T black)}
          end
-	 NM=S#","#T|OM
-      else
-	 NM=OM
+	 MarkedEdges:=E|L
       end
    end
 
    proc{UnMark P}
-      OM NM
+      L
    in
-      OM=MarkedNodes:=NM
-      if {List.member P OM} then
+      L=@MarkedNodes
+      if {List.member P L} then
 	 Info={O getNodeInfo({P getId($)} $)}
-      in
+         in
 	 {Info.canvas tk(itemconfigure Info.box width:1)}
-	 NM={List.subtract OM P}
-      else
-	 NM=OM
+	 MarkedNodes:={List.subtract L P}
       end
    end
 
    proc{UnMarkEdge S T}
-      OM NM
+      L E
    in
-      OM=MarkedEdges:=NM
-      if {List.member S#","#T OM} then
-         if {Not {List.member S#","#T @FailedLinks}} then
+      L=@MarkedEdges
+      E=S#","#T
+      if {List.member E L} then
+         if {Not {List.member E @FailedLinks}} then
 	      {O removeEdge(S T black)}
               {O addEdge(S T gray)}
          else
               {O removeEdge(S T darkblue)}
               {O addEdge(S T red)}
          end
-	 NM={List.subtract OM S#","#T}
-      else
-	 NM=OM
+	MarkedEdges:={List.subtract L E}
       end
    end
+
    proc{Do P Proc}
       {ForAll P|{List.subtract @MarkedNodes P} Proc}
    end
+
    proc{DoEdges P Q Proc}
       {ForAll P#","#Q|{List.subtract @MarkedEdges P#","#Q} Proc}
    end
@@ -241,9 +240,6 @@ thread
                           case A of
                             F#","#T then
                               {RestoreFailedLink F T}
-                              if {List.member F#","#T @FailedLinks} then
-                                  {System.showInfo "Still member:"#F#","#T}
-                              end
                               {UnMarkEdge F T}
                               {RemovePartitionedLink F T}
                               FromPbeer = {GetPbeer F}
