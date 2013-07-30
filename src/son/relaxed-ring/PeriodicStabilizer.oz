@@ -44,7 +44,7 @@ export
 
 define
 
-   DELTA       = 60000    % Granularity to trigger stabilization
+   DELTA       = 5000    % Granularity to trigger stabilization
 
    fun {New}
       ComLayer    % Low level communication layer
