@@ -57,7 +57,7 @@ define
    %% algorithm from http://www.cse.yorku.ca/~oz/hash.html
    %% Returns a hash value for N between 0 and Max
    fun {Hash N Max}
-      B = {Pickle.pack N}
+      B = {VirtualByteString.toCompactByteString {Pickle.pack N}}
       L = {ByteString.length B}
       fun{Loop I Old}
          if I < L then
