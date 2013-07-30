@@ -50,7 +50,7 @@ import
    Component         at '../corecomp/Component.ozf'
    Pbeerp2p          at 'Pbeerp2p.ozf'
    FailureDetector   at 'FailureDetector.ozf'
-   System
+  
 export
    New
 define

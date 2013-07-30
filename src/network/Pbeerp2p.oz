@@ -46,14 +46,14 @@ import
    Component   at '../corecomp/Component.ozf'
    Pp2p        at 'Pp2p.ozf'
    PbeerIdList   at '../utils/PbeerIdList.ozf'
-   System
+   
 export
    New
 define
 
-   fun{ThisThreadId}
+   /*fun{ThisThreadId}
       {VirtualString.toAtom {Value.toVirtualString {Thread.this} 10 10}}
-   end	
+   end*/	
 
    fun {New}
       ComLayer    % Low level communication layer
