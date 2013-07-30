@@ -46,6 +46,8 @@ import
    TimerMaker  at '../../timer/Timer.ozf'
    Utils       at '../../utils/Misc.ozf'
    PeriodicStabilizer at 'PeriodicStabilizer.ozf'
+   Merger      at 'Merger.ozf'
+
 export
    New
 define
@@ -74,6 +76,7 @@ define
       Ring        % Ring Reference ring(name:<atom> id:<name>)
       FingerTable % Routing table 
       SelfStabilizer  % Periodic Stalizer
+      SelfMerger  % Merge Module
       Self        % Full Component
       SelfRef     % Pbeer reference pbeer(id:<Id> port:<Port>)
       Succ        % Reference to the successor
@@ -133,6 +136,18 @@ define
          end
       end
 
+     proc {BackwardForPreceedingId Event Target}
+         ThePred = {RingList.getBefore Target @PredList @SelfRef.id MaxKey}
+      in
+         if ThePred \= nil then
+            {Zend ThePred Event}
+         else
+            %%TODO: acknowledge somehow that the message is lost
+            {System.showInfo "Something went wrong, I cannot backward msg"}
+            skip
+         end
+      end
+
 %      fun {GetNewPBeerRef}
 %         pbeer(id:{KeyRanges.getRandomKey MaxKey}
 %               port:{@ComLayer getPort($)})
@@ -160,11 +175,26 @@ define
          end
       end
 
+      proc {ClosestPreceedingRoute Event Target}
+         if {HasFeature Event last} andthen Event.last then
+            %% I am supposed to be the responsible, but I have a branch
+            %% or somebody was missed (non-transitive connections)
+            {BackwardForPreceedingId Event Target}
+         elseif {BelongsTo Event.src.id @SelfRef.id @Succ.id} then
+            %% I think my successor is the responsible => set last = true
+            {Zend @Succ {Record.adjoinAt Event last true}}
+         else
+            %% Forward the message using the routing table
+            {@FingerTable route(msg:Event src:Event.src to:Target)}
+         end
+      end
+
       proc {Update CandidatePbeer}
         if {Not {PbeerList.isIn CandidatePbeer @Crashed}} then
             if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id} then
                 OldSucc = @Succ.id
                 in
+                {System.showInfo "In Update Succ"}
 	        Succ := CandidatePbeer
                 {Monitor CandidatePbeer}
                 {@FingerTable monitor(CandidatePbeer)}
@@ -172,6 +202,7 @@ define
             elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
                 OldPred = @Pred.id
                 in
+                 {System.showInfo "In Update Pred"}
                  PredList := {AddToList CandidatePbeer @PredList}
                  Pred := CandidatePbeer 
                  {Monitor CandidatePbeer}
@@ -214,17 +245,17 @@ define
             PredList := {AddToList Pbeer @PredList}
             Pred := Pbeer %% Monitoring Pbeer and it's on predList
             {Monitor Pbeer}
-            {@FingerTable monitor(Pbeer)}
+            %{@FingerTable monitor(Pbeer)}
             {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
             {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: This is not always correct
          end
          if {BelongsTo Pbeer.id @SelfRef.id @Succ.id-1} then
             OldSucc = @Succ.id
             in
-            SuccList := {AddToList Pbeer @SuccList}   
+            %SuccList := {AddToList Pbeer @SuccList}   
             Succ := Pbeer
             {Monitor Pbeer}
-            {@FingerTable monitor(Pbeer)}
+            %{@FingerTable monitor(Pbeer)}
             {Zend @Succ fix(src:@SelfRef)}
             {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
          end 
@@ -249,13 +280,14 @@ define
          PredList := {RingList.remove Pbeer @PredList}
          {@FingerTable removeFinger(Pbeer)}
          {@Logger event(@SelfRef.id crash(Pbeer.id) color:red)}
-         if Pbeer == @Succ then
+         if Pbeer.id == @Succ.id then
+            %{System.showInfo "My Succ Crashed:"#@SelfRef.id#" "#@Succ.id}
             Succ := {RingList.getFirst @SuccList @SelfRef}
             {Monitor @Succ}
             {Zend @Succ fix(src:@SelfRef)}
             {@Logger event(@SelfRef.id succChanged(@Succ.id Pbeer.id) color:green)}
          end
-         if Pbeer == @Pred then
+         if Pbeer.id == @Pred.id then
             {@Logger event(@SelfRef.id onRing(false) color:darkblue)}
             if @PredList \= nil then
                %Pred := {RingList.getLast @PredList @Pred}
@@ -458,6 +490,29 @@ define
          Res = @SelfRef
       end
 
+     proc {MakeAQueueInsert Event}
+         {SelfMerger Event}
+     end
+
+     proc {MLookup Event}
+         Target = Event.id
+         F = Event.fanout
+         in
+         if F > 1 then
+            skip %% I'll do something
+         end
+  
+         if Target \= @SelfRef andthen Target \= @Succ then
+            if {BelongsTo Target.id @SelfRef.id @Succ.id} then
+               {Zend Target retrievePred(src:@SelfRef psucc:@Succ)}
+            else
+               {ClosestPreceedingRoute Event Target.id}
+            end
+         end
+         {Update Target}
+         {System.showInfo "In MLookup Merger:"#Target.id#" Fanout:"#F}
+      end
+
       proc {NewSucc newSucc(newSucc:NewSucc succList:NewSuccList)}
 	 OldSucc = @Succ.id
 	 in
@@ -479,10 +534,12 @@ define
       end
 
       proc {RetrievePred retrievePred(src:Src psucc:PSucc)}
-         %{System.showInfo "In RetrievePred"}
  	 {Zend Src retrievePredRes(src:@SelfRef
                                   succp:@Pred
                                   succList:@SuccList)}
+         if PSucc.id \= @SelfRef.id then
+               {MakeAQueueInsert makeAQueueInsert(PSucc)}
+         end
          {Update Src}
       end
 
@@ -587,6 +644,8 @@ define
                   lookup:        Lookup
                   lookupHash:    LookupHash
                   lookupRequest: LookupRequest
+                  mlookup:       MLookup
+                  makeAQueueInsert: MakeAQueueInsert
                   needFinger:    ToFingerTable
                   newFinger:     ToFingerTable
                   newSucc:       NewSucc
@@ -638,6 +697,7 @@ define
       {SelfStabilizer setComLayer(@ComLayer)}
       {SelfStabilizer setListener(Self)}
 
+
       Pred        = {NewCell @SelfRef}
       Succ        = {NewCell @SelfRef}
       PredList    = {NewCell {RingList.new}}
@@ -646,6 +706,12 @@ define
       Ring        = {NewCell ring(name:lucifer id:{Name.new})}
       WishedRing  = {NewCell none}
       FingerTable = {NewCell BasicForward}
+
+      %% For ReCircle
+      SelfMerger = {Merger.new}
+      {SelfMerger setComLayer(@ComLayer)}
+      {SelfMerger setListener(Self)}
+     
       %% Return the component
       Self
    end
