@@ -2,7 +2,7 @@ MAKE = make
 INSTALL = install
 INSTALL_FUNCTOR = $(INSTALL) -m 644
 DESTDIR = ../../../lib/son/relaxed-ring
-SRCS = FingerTable PeriodicStabilizer Node RlxRing
+SRCS = FingerTable PeriodicStabilizer Merger Node RlxRing
 
 all: $(foreach source, $(SRCS), src_$(source))
 
