@@ -64,6 +64,14 @@ define
          {ComLayer signalLinkDelay}
       end
 
+      proc {ReduceLinkDelay reduceLinkDelay}
+         {ComLayer signalLowLinkDelay}
+      end
+
+      proc {NoLinkDelay noLinkDelay}
+         {ComLayer signalNoLinkDelay}
+      end
+
       Events = events(
                   any:              RlxRingNode
                   setListener:      RlxRingNode
@@ -71,6 +79,8 @@ define
 	          injectLinkFail:   InjectLinkFail
                   restoreLink:      RestoreLink
                   injectLinkDelay:  InjectLinkDelay
+                  reduceLinkDelay:  ReduceLinkDelay
+                  noLinkDelay:      NoLinkDelay
                   )
    in
       local
