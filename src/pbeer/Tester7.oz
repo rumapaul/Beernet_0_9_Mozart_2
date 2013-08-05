@@ -2,7 +2,8 @@
 %% This file is meant to test the functionality of the functors implemented on
 %% this module.
 
-%% Solved a bug(Inject Partition after node failure), partition script 
+%% Solved a bug(Inject Partition after node failure), 
+%%             sequential partition script, partition of almost equal size 
 %% Refreshing scheme of links among nodes
 %% Churn Script(Churn parameter: % of node turnover per time unit per node)
 
@@ -361,7 +362,15 @@ in
                                      "Congested"#proc{$} {Do P proc{$ P}
 							          {P injectLinkDelay}
 							        end} 
-                                                  end]}
+                                                  end
+                                     "LowCongestion"#proc{$} {Do P proc{$ P}
+                                                                      {P reduceLinkDelay}
+                                                                   end}
+                                                     end
+                                     "NoCongestion"#proc{$} {Do P proc{$ P}
+                                                                     {P noLinkDelay}
+                                                                  end}
+                                                    end]}
 			end
 		     end}
 		 [] edge(From To ...) then
