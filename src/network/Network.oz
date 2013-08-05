@@ -93,6 +93,8 @@ define
 		  signalALinkFailure: ComLayer 
                   signalALinkRestore: ComLayer
                   signalLinkDelay: ComLayer
+                  signalLowLinkDelay: ComLayer
+                  signalNoLinkDelay:  ComLayer
                   )
    in
       ComLayer       = {Pbeerp2p.new}

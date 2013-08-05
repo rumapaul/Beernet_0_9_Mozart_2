@@ -37,7 +37,6 @@ functor
 
 import
    Component   at '../corecomp/Component.ozf'
-   System
 
 export
    New
@@ -45,8 +44,8 @@ export
 define
 
    DELTA       = 500    % Granularity to tune the link delay (in sync with failure detector)
-   INIT_DELAY     = 0   % Initial Timeout value
-   MAX_DELAY = 2000   % Timeout must not go beyond this value
+   INIT_DELAY     = 0   % Initial Delay value
+   MAX_DELAY = 2000   % Delay must not go beyond this value
 
    fun {New}
       SitePort       % Port to receive messages
@@ -89,13 +88,24 @@ define
           if @DelayPeriod + DELTA =< MAX_DELAY then
               DelayPeriod := @DelayPeriod + DELTA
           end
-          {System.showInfo "Link Delay:"#@DelayPeriod}
+      end
+
+      proc {InjectLowLinkDelay injectLowLinkDelay}
+          if @DelayPeriod > INIT_DELAY then
+              DelayPeriod := @DelayPeriod - DELTA
+          end
+      end
+
+      proc {InjectNoLinkDelay injectNoLinkDelay}
+          DelayPeriod := INIT_DELAY
       end
 
       Events = events(
                   getPort:    GetPort
                   pp2pSend:   PP2PSend
                   injectLinkDelay: InjectLinkDelay
+                  injectLowLinkDelay: InjectLowLinkDelay
+                  injectNoLinkDelay:  InjectNoLinkDelay
                   )
 
    in

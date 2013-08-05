@@ -147,6 +147,14 @@ define
          {@ComLayer injectLinkDelay}
      end
 
+     proc {SignalLowLinkDelay signalLowLinkDelay}
+         {@ComLayer injectLowLinkDelay}
+     end
+
+     proc {SignalNoLinkDelay signalNoLinkDelay}
+         {@ComLayer injectNoLinkDelay}
+     end
+
       Events = events(
                   getPort:       GetPort
                   getRef:        GetRef
@@ -158,6 +166,8 @@ define
                   signalALinkFailure: SignalALinkFailure
                   signalALinkRestore: SignalALinkRestore
                   signalLinkDelay: SignalLinkDelay
+                  signalLowLinkDelay: SignalLowLinkDelay
+                  signalNoLinkDelay:  SignalNoLinkDelay
                   )
    in
       ComLayer    = {NewCell {Pp2p.new}}

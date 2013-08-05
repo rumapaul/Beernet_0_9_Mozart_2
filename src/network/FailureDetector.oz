@@ -94,8 +94,8 @@ define
 	      if @Period < MAX_TIMEOUT then
                   Period := @Period + DELTA
               end
-         elseif @Period > TIMEOUT then
-              Period := @Period - DELTA
+         /*elseif @Period > TIMEOUT then
+              Period := @Period - DELTA*/
          end
          
          Suspected = {PbeerList.minus @Pbeers @Alive}
