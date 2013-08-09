@@ -191,7 +191,7 @@ define
 
       proc {Update CandidatePbeer}
         if {Not {PbeerList.isIn CandidatePbeer @Crashed}} then
-            if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id} then
+            if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id-1} then
                 OldSucc = @Succ.id
                 in
                 {System.showInfo "In Update Succ"}
@@ -212,15 +212,6 @@ define
             end
         end 
       end
-
-/*
-      proc {UnregisterPeers Peers}
-         {RingList.forAll Peers
-            proc {$ Peer}
-               {@ComLayer stopMonitor(Peer)}
-            end}
-      end
-*/
 
       proc {WatchPeers Peers}
          {RingList.forAll Peers
