@@ -299,7 +299,9 @@ define
                      leave:            Leave
                      lookup:           ToNode
                      lookupHash:       ToNode
+                     noLinkDelay:      ToNode
                      receive:          ReceiveTagged
+                     reduceLinkDelay:  ToNode
                      refreshFingers:   ToNode
                      send:             SendTagged
                      setLogger:        ToNode

@@ -50,7 +50,7 @@ import
    Component         at '../corecomp/Component.ozf'
    Pbeerp2p          at 'Pbeerp2p.ozf'
    FailureDetector   at 'FailureDetector.ozf'
-   System
+  
 export
    New
 define
@@ -93,6 +93,8 @@ define
 		  signalALinkFailure: ComLayer 
                   signalALinkRestore: ComLayer
                   signalLinkDelay: ComLayer
+                  signalLowLinkDelay: ComLayer
+                  signalNoLinkDelay:  ComLayer
                   )
    in
       ComLayer       = {Pbeerp2p.new}

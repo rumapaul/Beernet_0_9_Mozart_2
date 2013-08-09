@@ -42,7 +42,7 @@ define
       of H|T then
          if H.id < Peer.id then
             H|{Add Peer T}
-         elseif H == Peer then
+         elseif H.id == Peer.id then
             %% Compare the whole peer, because it could be they have same id
             %% but different ports
             L
