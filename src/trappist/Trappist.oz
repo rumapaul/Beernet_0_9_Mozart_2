@@ -131,7 +131,9 @@ define
 
       %% --- For the TMs ----------------------------------------------------
       proc {InitRTM Event}
-         initRTM(client:Client protocol:Protocol tid:Tid ...) = Event
+         Client = Event.client
+         Protocol = Event.protocol
+         Tid = Event.tid
          RTM
       in
          if @NodeRef.id \= Event.leader.ref.id then
@@ -151,7 +153,8 @@ define
 
       %% --- For the TPs ----------------------------------------------------
       proc {Brew Event}
-         brew(tid:Tid protocol:Protocol ...) = Event
+         Tid = Event.tid
+         Protocol = Event.protocol
          TP
       in
          TP = {TPmakers.Protocol.new args(tid:Tid)} 
