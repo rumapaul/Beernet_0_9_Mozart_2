@@ -31,7 +31,8 @@ export
    Minus
    New
    Remove
-   RemoveLast  
+   RemoveLast
+   RetrievePbeer  
    Union
 define
 
@@ -86,6 +87,21 @@ define
          end
       [] nil then
          false
+      end
+   end
+
+   fun {RetrievePbeer PeerId L}
+      case L
+      of H|T then
+         if H.id == PeerId then
+	    H
+         elseif H.id < PeerId then
+            {RetrievePbeer PeerId T}
+         else
+            nil
+         end
+      [] nil then
+         nil
       end
    end
 
