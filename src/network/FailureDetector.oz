@@ -40,6 +40,7 @@ import
    Component   at '../corecomp/Component.ozf'
    PbeerList   at '../utils/PbeerList.ozf'
    Timer       at '../timer/Timer.ozf'
+   System
 export
    New
 define
@@ -57,60 +58,58 @@ define
       Alive       % Pbeers known to be alive
       Notified    % Pbeers already notified as crashed
       Pbeers      % Pbeers to be monitored
-      NewPbeers   % Pbeers register during a ping round
-      Period      % Period of time to time out
+      Connections   % Pbeers register during a ping round
       TheTimer    % Component that triggers timeout
 
-      %DebugVar
-
       %% Sends a ping message to all monitored pbeers and launch the timer
-      proc {NewRound start}
-         for Pbeer in @Pbeers do
-            {ComLayer sendTo(Pbeer ping(@SelfPbeer tag:fd) log:faildet)}
-         end
-         {TheTimer startTimer(@Period)}
+      proc {NewRound start(Pbeer)}
+         {ComLayer sendTo(Pbeer ping(@SelfPbeer tag:fd) log:faildet)}
+         {TheTimer startTrigger(Pbeer.period timeout(Pbeer))}
       end
 
       proc {Monitor monitor(Pbeer)}
-         NewPbeers := {PbeerList.add Pbeer @NewPbeers}
+         if {Not {PbeerList.isIn Pbeer @Pbeers}} then
+            NewConnection
+            in
+            Pbeers := {PbeerList.add Pbeer @Pbeers}
+            NewConnection = {Record.adjoinAt Pbeer period TIMEOUT}
+            Connections := {PbeerList.add NewConnection @Connections}
+            {NewRound start(NewConnection)}
+         end
       end
 
-      /*proc {PrintAList L}
-        for Pbeer in L do
-          {System.showInfo Pbeer.id}
-        end
-        {System.showInfo "\n"}
-      end*/
-
-      proc {Timeout timeout}
-         Resurrected Suspected
+      proc {Timeout timeout(ConnectionPbeer)}
+         Pbeer
          in
-         Resurrected = {PbeerList.intersection @Alive @Notified}
-         if  Resurrected \= nil then                      %(R)Intersection with Notified,not Suspected 
-              for Pbeer in Resurrected do
-                 Notified := {PbeerList.remove Pbeer @Notified}
-                 {@Listener alive(Pbeer)}
-              end         
-	      if @Period < MAX_TIMEOUT then
-                  Period := @Period + DELTA
-              end
-         /*elseif @Period > TIMEOUT then
-              Period := @Period - DELTA*/
-         end
-         
-         Suspected = {PbeerList.minus @Pbeers @Alive}
-         %% Only notify about new suspicions
-         for Pbeer in {PbeerList.minus Suspected @Notified} do
-            {@Listener crash(Pbeer)}
-         end
-         %% Clear up and get ready for new ping round
-         Notified    := {PbeerList.union @Notified Suspected}
-         Alive       := {PbeerList.new}
-         Pbeers      := {PbeerList.union @Pbeers @NewPbeers}
-         NewPbeers   := {PbeerList.new}
+         Connections := {PbeerList.remove ConnectionPbeer @Connections}
+         Pbeer = {PbeerList.retrievePbeer ConnectionPbeer.id @Pbeers}
+         if Pbeer \= nil then
+           Period = {NewCell ConnectionPbeer.period}
+           NewConnection
+           in
+           if {PbeerList.isIn ConnectionPbeer @Alive} andthen
+               {PbeerList.isIn ConnectionPbeer @Notified} then
+                  Notified := {PbeerList.remove ConnectionPbeer @Notified}
+                  {@Listener alive(Pbeer)}
+                      
+	          if @Period < MAX_TIMEOUT then
+                     Period := @Period + DELTA
+                  end
+           end
 
-         %DebugVar    := @DebugVar + 1
-         {NewRound start}
+           NewConnection = {Record.adjoinAt Pbeer period @Period}
+
+           if {Not {PbeerList.isIn ConnectionPbeer @Alive}} andthen
+              {Not {PbeerList.isIn ConnectionPbeer @Notified}} then
+                Notified := {PbeerList.add NewConnection @Notified}
+                {@Listener crash(Pbeer)}
+           end
+           %% Clear up and get ready for new ping round
+           Alive       := {PbeerList.remove ConnectionPbeer @Alive}
+           Connections := {PbeerList.add NewConnection @Connections}
+
+           {NewRound start(NewConnection)}
+        end
       end
 
       proc {Ping ping(Pbeer tag:fd)}
@@ -146,20 +145,18 @@ define
                   )
    in
       Pbeers      = {NewCell {PbeerList.new}}
-      NewPbeers   = {NewCell {PbeerList.new}}
+      Connections   = {NewCell {PbeerList.new}}
       Alive       = {NewCell {PbeerList.new}} 
       Notified    = {NewCell {PbeerList.new}}
-      Period      = {NewCell TIMEOUT}
+      %Period      = {NewCell TIMEOUT}
       SelfPbeer   = {NewCell pbeer(id:~1 port:_)}
       TheTimer    = {Timer.new}
-
-      %DebugVar    = {NewCell 0}
 
       Self        = {Component.new Events}
       Listener    = Self.listener
       {TheTimer setListener(Self.trigger)}
       
-      {NewRound start}
+      %{NewRound start}
       Self.trigger 
    end
 end
