@@ -71,6 +71,7 @@ define
          if Pbeer.lowerflag == STARTLOWERTIMER then
              {TheTimer startTrigger(Pbeer.period-DELTA checklowtimeout(Pbeer))}
          end
+         %{System.showInfo "Period:"#Pbeer.period}
          {TheTimer startTrigger(Pbeer.period timeout(Pbeer))}
       end
 
@@ -112,7 +113,7 @@ define
                   Notified := {PbeerList.remove ConnectionPbeer @Notified}
                   {@Listener alive(Pbeer)}
                       
-	          if ConnectionPbeer.period < MAX_TIMEOUT then
+	          /*if ConnectionPbeer.period < MAX_TIMEOUT then
                      NewConnection := {Record.adjoinAt @NewConnection 
                                                   period ConnectionPbeer.period+DELTA}
                   end
@@ -123,7 +124,7 @@ define
                      NewConnection := {Record.adjoinAt @NewConnection lowerflag INIT_FLAG}
                   elseif ConnectionPbeer.period > TIMEOUT then
                      NewConnection := {Record.adjoinAt @NewConnection lowerflag STARTLOWERTIMER}
-                  end
+                  end*/
            end  
 
            if {Not {PbeerList.isIn ConnectionPbeer @Alive}} andthen
@@ -176,7 +177,7 @@ define
       Connections   = {NewCell {PbeerList.new}}
       Alive       = {NewCell {PbeerList.new}} 
       Notified    = {NewCell {PbeerList.new}}
-      %Period      = {NewCell TIMEOUT}
+
       SelfPbeer   = {NewCell pbeer(id:~1 port:_)}
       TheTimer    = {Timer.new}
 
@@ -184,7 +185,6 @@ define
       Listener    = Self.listener
       {TheTimer setListener(Self.trigger)}
       
-      %{NewRound start}
       Self.trigger 
    end
 end
