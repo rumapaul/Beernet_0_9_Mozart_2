@@ -2,7 +2,7 @@ MAKE = make
 INSTALL = install
 INSTALL_FUNCTOR = $(INSTALL) -m 644
 DESTDIR = ../../lib/utils/
-SRCS = HashedList KeyRanges PbeerList PbeerIdList Random RingList TextFile Misc
+SRCS = HashedList KeyRanges PbeerList PbeerIdList PbeerQueue Random RingList TextFile Misc
 
 all: $(foreach source, $(SRCS), src_$(source)) nanoStore
 
