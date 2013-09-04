@@ -32,6 +32,10 @@ export
    Public 
    Success
    SlSize
+
+   Fanout
+   MLookupsPerPeriod
+
 define
 
    Abort       = 'ABORT'      % 
@@ -49,6 +53,12 @@ define
    %% aliases
    NoValue  = NotFound
    NoSecret = Public
+
+   %%ReCircle Parameters
+   Fanout = 1 % Acceptable Values 1-5
+   MLookupsPerPeriod = 2 % Acceptable Values 1-5 and 100, 100 implies infinity
+
+
 
 end
 
