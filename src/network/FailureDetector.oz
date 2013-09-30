@@ -113,7 +113,7 @@ define
                   Notified := {PbeerList.remove ConnectionPbeer @Notified}
                   {@Listener alive(Pbeer)}
                       
-	          /*if ConnectionPbeer.period < MAX_TIMEOUT then
+	          if ConnectionPbeer.period < MAX_TIMEOUT then
                      NewConnection := {Record.adjoinAt @NewConnection 
                                                   period ConnectionPbeer.period+DELTA}
                   end
@@ -124,7 +124,7 @@ define
                      NewConnection := {Record.adjoinAt @NewConnection lowerflag INIT_FLAG}
                   elseif ConnectionPbeer.period > TIMEOUT then
                      NewConnection := {Record.adjoinAt @NewConnection lowerflag STARTLOWERTIMER}
-                  end*/
+                  end
            end  
 
            if {Not {PbeerList.isIn ConnectionPbeer @Alive}} andthen
