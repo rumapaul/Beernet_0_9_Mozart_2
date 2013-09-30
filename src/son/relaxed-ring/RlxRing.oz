@@ -437,7 +437,8 @@ define
       end
 
       proc {JoinLater joinLater(NewSucc)}
-         {Timer JOIN_WAIT Self startJoin(succ:NewSucc ring:@WishedRing)}
+         %{Timer JOIN_WAIT Self startJoin(succ:NewSucc ring:@WishedRing)}
+         {Timer startTrigger(JOIN_WAIT startJoin(succ:NewSucc ring:@WishedRing) Self)}
       end
 
       proc {JoinOk joinOk(pred:NewPred succ:NewSucc succList:NewSuccList)}
