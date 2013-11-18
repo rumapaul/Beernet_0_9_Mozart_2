@@ -43,9 +43,11 @@
 
 functor
 import
+   System
    Component   at '../corecomp/Component.ozf'
    Pp2p        at 'Pp2p.ozf'
    PbeerIdList   at '../utils/PbeerIdList.ozf'
+   Constants   at '../commons/Constants.ozf'
    
 export
    New
@@ -88,10 +90,12 @@ define
 	end
       end
 
-      proc {Deliver pp2pDeliver(_ '#'(SrcId MsgId Msg))}
+      proc {Deliver pp2pDeliver(_ '#'(_ MsgId Msg))}
          %{@Logger 'in'(src:SrcId n:MsgId dest:@SelfId msg:Msg)}
 	 %{@Logger 'in'(MsgId @SelfId {ThisThreadId} SrcId Msg color:green)}
-	 {HandleInEvents @SelfId MsgId Msg}
+         if Constants.isVisual == 1 then
+	 	{HandleInEvents @SelfId MsgId Msg}
+         end
          {@Listener Msg}
       end
 
@@ -115,10 +119,14 @@ define
          else
             LogTag = network
          end
-         %{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
-	 %{@Logger out(MsgId @SelfId {ThisThreadId} Dest.id color:blue)}
-         if {Not {PbeerIdList.isIdIn Dest.id @FailedLinks}} then
-            {@ComLayer pp2pSend(Dest.port '#'(@SelfId MsgId Msg))}
+         if Dest\=nil then
+             if Constants.isVisual == 0 then
+         	{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
+             end
+	     %{@Logger out(MsgId @SelfId {ThisThreadId} Dest.id color:blue)}
+             if {Not {PbeerIdList.isIdIn Dest.id @FailedLinks}} then
+                {@ComLayer pp2pSend(Dest '#'(@SelfId MsgId Msg))}
+             end
          end
       end
 
@@ -155,6 +163,10 @@ define
          {@ComLayer injectNoLinkDelay}
      end
 
+     proc {SimulateALinkDelay Event}
+         {@ComLayer Event}
+     end
+
       Events = events(
                   getPort:       GetPort
                   getRef:        GetRef
@@ -168,6 +180,7 @@ define
                   signalLinkDelay: SignalLinkDelay
                   signalLowLinkDelay: SignalLowLinkDelay
                   signalNoLinkDelay:  SignalNoLinkDelay
+                  simulateALinkDelay: SimulateALinkDelay
                   )
    in
       ComLayer    = {NewCell {Pp2p.new}}
