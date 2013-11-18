@@ -54,6 +54,7 @@ define
    JOIN_WAIT   = 5000      % Milliseconds to wait to retry a join 
    MAX_KEY     = Constants.largeKey
    SL_SIZE     = Constants.slSize
+   IS_VISUAL_DEBUG = Constants.isVisual
 
    BelongsTo      = KeyRanges.belongsTo
 
@@ -194,21 +195,25 @@ define
             if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id-1} then
                 OldSucc = @Succ.id
                 in
-                {System.showInfo "In Update Succ"}
+                %{System.showInfo "In Update, at:"#@SelfRef.id#" Succ:"#CandidatePbeer.id}
 	        Succ := CandidatePbeer
                 {Monitor CandidatePbeer}
                 {@FingerTable monitor(CandidatePbeer)}
-                {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+                if IS_VISUAL_DEBUG == 1 then
+                     {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+                end
             elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
                 OldPred = @Pred.id
                 in
-                 {System.showInfo "In Update Pred"}
+                 %{System.showInfo "In Update Pred, at:"#@SelfRef.id#" Pred:"#CandidatePbeer.id}
                  PredList := {AddToList CandidatePbeer @PredList}
                  Pred := CandidatePbeer 
                  {Monitor CandidatePbeer}
                  {@FingerTable monitor(CandidatePbeer)}
-                 {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
-                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: Check
+                 if IS_VISUAL_DEBUG == 1 then
+                      {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
+                      {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: Check
+                 end
             end
         end 
       end
@@ -229,16 +234,22 @@ define
 
       proc {Alive alive(Pbeer)}
          Crashed  := {PbeerList.remove Pbeer @Crashed}
-         {@Logger event(@SelfRef.id alive(Pbeer.id) color:green)}
+         if IS_VISUAL_DEBUG == 1 then
+              {@Logger event(@SelfRef.id alive(Pbeer.id) color:green)}
+         end
+         {@Logger stat(src:@SelfRef.id msg:alive pointer:Pbeer.id)}
          if {BelongsTo Pbeer.id @Pred.id @SelfRef.id-1} then
             OldPred = @Pred.id
             in
             PredList := {AddToList Pbeer @PredList}
             Pred := Pbeer %% Monitoring Pbeer and it's on predList
             {Monitor Pbeer}
-            %{@FingerTable monitor(Pbeer)}
-            {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
-            {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: This is not always correct
+            {@FingerTable monitor(Pbeer)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
+                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO:Not always correct
+            end
+            {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:pred)}
          end
          if {BelongsTo Pbeer.id @SelfRef.id @Succ.id-1} then
             OldSucc = @Succ.id
@@ -246,9 +257,12 @@ define
             %SuccList := {AddToList Pbeer @SuccList}   
             Succ := Pbeer
             {Monitor Pbeer}
-            %{@FingerTable monitor(Pbeer)}
+            {@FingerTable monitor(Pbeer)}
             {Zend @Succ fix(src:@SelfRef)}
-            {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+            end
+            {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:succ)}
          end 
       end
 
@@ -270,21 +284,29 @@ define
          SuccList := {RingList.remove Pbeer @SuccList}
          PredList := {RingList.remove Pbeer @PredList}
          {@FingerTable removeFinger(Pbeer)}
-         {@Logger event(@SelfRef.id crash(Pbeer.id) color:red)}
+         {@Logger stat(src:@SelfRef.id msg:crash pointer:Pbeer.id)}
+         if IS_VISUAL_DEBUG == 1 then
+              {@Logger event(@SelfRef.id crash(Pbeer.id) color:red)}
+         end
          if Pbeer.id == @Succ.id then
-            %{System.showInfo "My Succ Crashed:"#@SelfRef.id#" "#@Succ.id}
             Succ := {RingList.getFirst @SuccList @SelfRef}
             {Monitor @Succ}
             {Zend @Succ fix(src:@SelfRef)}
-            {@Logger event(@SelfRef.id succChanged(@Succ.id Pbeer.id) color:green)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id succChanged(@Succ.id Pbeer.id) color:green)}
+            end
          end
          if Pbeer.id == @Pred.id then
-            {@Logger event(@SelfRef.id onRing(false) color:darkblue)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id onRing(false) color:darkblue)}
+            end
             if @PredList \= nil then
                %Pred := {RingList.getLast @PredList @Pred}
                Pred := {RingList.getLast @PredList @SelfRef}
                {Monitor @Pred}
-               {@Logger event(@SelfRef.id predChanged(@Pred.id Pbeer.id) color:darkblue)}
+               if IS_VISUAL_DEBUG == 1 then
+                    {@Logger event(@SelfRef.id predChanged(@Pred.id Pbeer.id) color:darkblue)}
+               end
             end
          end
       end
@@ -318,14 +340,18 @@ define
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
             {Monitor Src}
-            {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
-            {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
+                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            end
          elseif {BelongsTo Src.id @Pred.id @SelfRef.id-1} then
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
             {Monitor Src}
-            {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
-            {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
+                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            end
          else
             %{System.show 'GGGGGGGGGGRRRRRRRRRRRAAAAAAAAAA'#@SelfRef.id}
             %% Just keep it in a branch
@@ -421,7 +447,9 @@ define
                PredList := {AddToList @Pred @PredList}
                %% Tell data management to migrate data in range ]OldPred, Pred]
                {@Listener newPred(old:OldPred new:@Pred tag:data)}
-               {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
+               if IS_VISUAL_DEBUG == 1 then
+                    {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
+               end
             else
                %NOT FOR ME - going to route
                {RlxRoute Event Src.id}
@@ -453,7 +481,9 @@ define
                                           {@FingerTable monitor(Pbeer)}
                                        end}
             FirstAck = unit
-	    {@Logger event(@SelfRef.id newSucc(@Succ.id) color:green)}
+            if IS_VISUAL_DEBUG == 1 then
+	         {@Logger event(@SelfRef.id newSucc(@Succ.id) color:green)}
+            end
          end
          if {BelongsTo NewPred.id @Pred.id @SelfRef.id} then
             {Zend NewPred newSucc(newSucc:@SelfRef succList:@SuccList)}
@@ -462,7 +492,9 @@ define
             %% set a failure detector on the predecessor
             {Monitor NewPred} 
             {@FingerTable monitor(NewPred)}
-            {@Logger event(@SelfRef.id newPred(@Pred.id) color:green)}
+            if IS_VISUAL_DEBUG == 1 then
+                 {@Logger event(@SelfRef.id newPred(@Pred.id) color:green)}
+            end
          end
       end
 
@@ -520,8 +552,10 @@ define
             {RingList.forAll @SuccList proc {$ Pbeer}
                                           {@FingerTable monitor(Pbeer)}
                                        end}
-	    {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
-	    {@Logger event(@Succ.id onRing(true) color:darkblue)}
+            if IS_VISUAL_DEBUG == 1 then
+	         {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+	         {@Logger event(@Succ.id onRing(true) color:darkblue)}
+            end
          end
       end
 
@@ -581,13 +615,11 @@ define
       end
 
       proc {Stabilize stabilize}
-         %{System.showInfo "In Stabilization"}
          {Zend @Succ retrievePred(src:@SelfRef
                                   psucc:@Succ)}
       end
 
       proc {StartJoin startJoin(succ:NewSucc ring:RingRef)}
-         %{System.show @SelfRef.id#'starting to join'}
          WishedRing := RingRef
          {Zend NewSucc join(src:@SelfRef ring:RingRef)}
       end
