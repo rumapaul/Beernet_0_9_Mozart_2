@@ -23,6 +23,7 @@
 functor
 export
    Add
+   Edit
    Different
    Intersection
    IsIn
@@ -47,6 +48,23 @@ define
             %% Compare the whole peer, because it could be they have same id
             %% but different ports
             L
+         else
+            Peer|L
+         end
+      [] nil then
+         Peer|nil
+      end
+   end
+
+   %% Edit a Peer in a sorted list.
+   %% Return the new list as result
+   fun {Edit Peer L}
+      case L
+      of H|T then
+         if H.id < Peer.id then
+            H|{Edit Peer T}
+         elseif H.id == Peer.id then
+            Peer|T
          else
             Peer|L
          end
