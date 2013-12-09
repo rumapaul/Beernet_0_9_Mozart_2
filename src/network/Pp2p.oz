@@ -52,6 +52,7 @@ define
       Listener       % Upper layer component
       FullComponent  % This component
       DelayPeriod      % Link Delay Knob 
+      AllLinkDelays   %Delay Periods for All links
 
       proc {GetPort getPort(P)}
          P = SitePort
@@ -60,8 +61,13 @@ define
       proc {PP2PSend pp2pSend(Dest Msg)}
          try
             thread
-               {Delay @DelayPeriod}
-               {Port.send Dest SitePort#Msg}
+               if @DelayPeriod > 0 then
+                  {Delay @DelayPeriod}
+               end
+               if {Value.hasFeature @AllLinkDelays Dest.id} then
+                   {Delay @AllLinkDelays.(Dest.id)}
+               end
+               {Port.send Dest.port SitePort#Msg}
             end
             %{Port.send Dest SitePort#Msg}
          catch _ then
@@ -100,16 +106,26 @@ define
           DelayPeriod := INIT_DELAY
       end
 
+      proc {SimulateALinkDelay simulateALinkDelay(Dest Period)}
+          if Period > 0 then
+             AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest Period}
+          else
+             AllLinkDelays := {Record.subtract @AllLinkDelays Dest}
+          end
+      end
+
       Events = events(
-                  getPort:    GetPort
-                  pp2pSend:   PP2PSend
-                  injectLinkDelay: InjectLinkDelay
+                  getPort:            GetPort
+                  pp2pSend:           PP2PSend
+                  injectLinkDelay:    InjectLinkDelay
                   injectLowLinkDelay: InjectLowLinkDelay
                   injectNoLinkDelay:  InjectNoLinkDelay
+                  simulateALinkDelay: SimulateALinkDelay
                   )
 
    in
       DelayPeriod = {NewCell INIT_DELAY}
+      AllLinkDelays = {NewCell linkdelays(name:simulateddelays)}
       local
          Stream
       in

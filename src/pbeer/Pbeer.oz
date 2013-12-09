@@ -295,6 +295,7 @@ define
 		     injectLinkFail:   ToNode	%R
                      injectLinkDelay:  ToNode
                      restoreLink:       ToNode
+                     simulateALinkDelay: ToNode
                      join:             Join
                      leave:            Leave
                      lookup:           ToNode

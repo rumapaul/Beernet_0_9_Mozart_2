@@ -37,22 +37,102 @@
 
 functor
 import
+   BootTime at 'x-oz://boot/Time'
    Component   at '../corecomp/Component.ozf'
    PbeerList   at '../utils/PbeerList.ozf'
    Timer       at '../timer/Timer.ozf'
-   System
+   %System
+   
 export
    New
 define
 
-   DELTA       = 500    % Granularity to tune the failure detector
-   TIMEOUT     = 500   % Initial Timeout value
-   MAX_TIMEOUT = 2000   % Timeout must not go beyond this value
+   INIT_TIMEOUT = 500   % Initial Timeout value
+   MIN_TIMEOUT = 100     % Minimum Timeout value
+   BUFFER_LIMIT = 20 	% Recent History of Round Trip Time
+   MONITORING_LIMIT = 75 % Maximum nodes that will be monitored by a node for a network size of 50
 
-   INIT_FLAG   =    0      %Initial value for lower timeout check flag
-   STARTLOWERTIMER = 1      %Start Lower Timer to check whether timeout can be reduced
-   LOWERTIMEOUT    = 2      %Timeout can be reduced one step
-   
+   %% Add an element at the end of list.
+   %% Return the new list as result
+   fun {ModifyABoundedList Element L}
+      fun {Insert E List}
+         case List
+            of H|T then
+               H|{Insert E T}
+         [] nil then
+              Element|nil
+         end
+      end
+      fun {Delete List}
+         case List
+           of _|T then
+              T
+         [] nil then
+              nil
+         end
+      end
+      NewList
+      in
+     
+      if {List.length L} >= BUFFER_LIMIT then
+          NewList = {Delete L}
+      else
+          NewList = L
+      end
+      {Insert Element NewList}
+   end
+
+   fun {CalculateTimeout L}
+      fun {CalculateVarianceStep List Avg}
+         case List
+            of H|T then
+            {Number.pow {Number.abs (Avg-H)} 2} + {CalculateVarianceStep T Avg}
+         [] nil then
+           0
+         end
+      end
+      TotalRTT
+      AvgRTT
+      CurrentVariance
+      CurrentStDev
+      CurrentCount = {List.length L}
+      RetVal
+      in
+      TotalRTT = {List.foldL L fun {$ X Y} X+Y end 0}
+      AvgRTT = TotalRTT div CurrentCount
+      CurrentVariance = {CalculateVarianceStep L AvgRTT} div CurrentCount
+      CurrentStDev = {Float.toInt {Float.ceil {Float.sqrt {Int.toFloat CurrentVariance}}}}
+
+      %RetVal = {Value.max (AvgRTT + 3*CurrentVariance) MIN_TIMEOUT}
+      RetVal = {Value.max (AvgRTT + 2*CurrentStDev) MIN_TIMEOUT}
+      
+      RetVal
+   end
+
+   fun {FindOldestSuspicion SuspicionList ConnectionList}
+      proc {SuspectedRound L ObservedOldVal ResultPbeer}
+          case L
+           of H|T then
+              CurrentConnection = {PbeerList.retrievePbeer H.id ConnectionList}
+              in
+              if CurrentConnection.last_response < ObservedOldVal then
+                 ObservedOldVal := CurrentConnection.last_response
+                 ResultPbeer := H
+              end
+              {SuspectedRound T ObservedOldVal ResultPbeer}
+           [] nil then
+              skip
+           end
+      end
+      ObservedOldest
+      RPbeer
+      in
+      ObservedOldest = {NewCell {BootTime.getReferenceTime}}
+      RPbeer = {NewCell nil}
+      {SuspectedRound SuspicionList ObservedOldest RPbeer}
+      @RPbeer
+   end
+
    fun {New}
       ComLayer    % Low level communication layer
       Listener    % Component where the deliver messages will be triggered
@@ -62,89 +142,88 @@ define
       Alive       % Pbeers known to be alive
       Notified    % Pbeers already notified as crashed
       Pbeers      % Pbeers to be monitored
-      Connections   % Pbeers register during a ping round
+      Connections   % Connection parameters for all the monitored Pbeers
       TheTimer    % Component that triggers timeout
 
       %% Sends a ping message to all monitored pbeers and launch the timer
-      proc {NewRound start(Pbeer)}
-         {ComLayer sendTo(Pbeer ping(@SelfPbeer tag:fd) log:faildet)}
-         if Pbeer.lowerflag == STARTLOWERTIMER then
-             {TheTimer startTrigger(Pbeer.period-DELTA checklowtimeout(Pbeer))}
-         end
-         %{System.showInfo "Period:"#Pbeer.period}
-         {TheTimer startTrigger(Pbeer.period timeout(Pbeer))}
+      proc {NewRound start(Pbeer T)}
+         {ComLayer sendTo(Pbeer ping(@SelfPbeer
+			timestamp:{BootTime.getReferenceTime} tag:fd) log:faildet)}
+         {TheTimer startTrigger(T timeout(Pbeer.id))}
       end
 
       proc {Monitor monitor(Pbeer)}
          if Pbeer.id \= @SelfPbeer.id andthen
             {Not {PbeerList.isIn Pbeer @Pbeers}} then
-            NewConnection = {NewCell nil}
+            NewConnection
             in
             Pbeers := {PbeerList.add Pbeer @Pbeers}
-            NewConnection := {Record.adjoinAt Pbeer period TIMEOUT}
-            NewConnection := {Record.adjoinAt @NewConnection lowerflag INIT_FLAG}
-            Connections := {PbeerList.add @NewConnection @Connections}
-            {NewRound start(@NewConnection)}
+            NewConnection = {Record.adjoinAt Pbeer rtt_history nil}
+            Connections := {PbeerList.add {Record.adjoinAt NewConnection last_response 0} @Connections}
+            {NewRound start(Pbeer INIT_TIMEOUT)}
+         end
+
+         if {List.length @Pbeers} > MONITORING_LIMIT andthen {List.length @Notified} > 0 then
+             ToBeDeletedPbeer = {FindOldestSuspicion @Notified @Connections} 
+             in
+             if ToBeDeletedPbeer\= nil then
+                 Pbeers := {PbeerList.remove ToBeDeletedPbeer @Pbeers}
+                 Notified := {PbeerList.remove ToBeDeletedPbeer @Notified}
+             end
          end
       end
 
-      proc {CheckLowTimeout checklowtimeout(ConnectionPbeer)}
-         if {PbeerList.isIn ConnectionPbeer @Alive} then
-            NewConnection = {NewCell ConnectionPbeer}
-            in
-            NewConnection := {Record.adjoinAt @NewConnection lowerflag LOWERTIMEOUT}
-            Connections := {PbeerList.remove ConnectionPbeer @Connections}
-            Connections := {PbeerList.add @NewConnection @Connections} 
-         end
-      end
-
-      proc {Timeout timeout(ConnectionPbeer)}
+      proc {Timeout timeout(PbeerId)}
          Pbeer
          CurrentConnection
          in
-         CurrentConnection = {PbeerList.retrievePbeer ConnectionPbeer.id @Connections} 
-         Pbeer = {PbeerList.retrievePbeer ConnectionPbeer.id @Pbeers}
-         Connections := {PbeerList.remove ConnectionPbeer @Connections}
+         CurrentConnection = {PbeerList.retrievePbeer PbeerId @Connections} 
+         Pbeer = {PbeerList.retrievePbeer PbeerId @Pbeers}
+         
          if Pbeer \= nil then
-           NewConnection = {NewCell ConnectionPbeer}
-           in
-           if {PbeerList.isIn ConnectionPbeer @Alive} andthen
-               {PbeerList.isIn ConnectionPbeer @Notified} then
-                  Notified := {PbeerList.remove ConnectionPbeer @Notified}
+           IsInAlive = {PbeerList.isIn Pbeer @Alive}
+           IsInNotified = {PbeerList.isIn Pbeer @Notified}
+           NewTimeout
+           in 
+           if IsInAlive andthen IsInNotified then
+                  Notified := {PbeerList.remove Pbeer @Notified}
                   {@Listener alive(Pbeer)}
-                      
-	          if ConnectionPbeer.period < MAX_TIMEOUT then
-                     NewConnection := {Record.adjoinAt @NewConnection 
-                                                  period ConnectionPbeer.period+DELTA}
-                  end
-           elseif {PbeerList.isIn ConnectionPbeer @Alive} then
-                  if CurrentConnection.lowerflag == LOWERTIMEOUT then
-                     NewConnection := {Record.adjoinAt @NewConnection 
-                                              period ConnectionPbeer.period-DELTA}
-                     NewConnection := {Record.adjoinAt @NewConnection lowerflag INIT_FLAG}
-                  elseif ConnectionPbeer.period > TIMEOUT then
-                     NewConnection := {Record.adjoinAt @NewConnection lowerflag STARTLOWERTIMER}
-                  end
            end  
 
-           if {Not {PbeerList.isIn ConnectionPbeer @Alive}} andthen
-              {Not {PbeerList.isIn ConnectionPbeer @Notified}} then
-                Notified := {PbeerList.add @NewConnection @Notified}
+           if {Not IsInAlive} andthen {Not IsInNotified} then
+                Notified := {PbeerList.add Pbeer @Notified}
                 {@Listener crash(Pbeer)}
            end
            %% Clear up and get ready for new ping round
-           Alive       := {PbeerList.remove ConnectionPbeer @Alive}
-           Connections := {PbeerList.add @NewConnection @Connections}
-
-           {NewRound start(@NewConnection)}
+           Alive       := {PbeerList.remove Pbeer @Alive}
+           %if {List.length CurrentConnection.rtt_history} > 0 then
+           if {List.length CurrentConnection.rtt_history} >= BUFFER_LIMIT then
+           	NewTimeout = {CalculateTimeout CurrentConnection.rtt_history}
+           else
+                NewTimeout = INIT_TIMEOUT
+           end
+           {NewRound start(Pbeer NewTimeout)}
+        else
+           Connections := {PbeerList.remove CurrentConnection @Connections}   
         end
       end
 
-      proc {Ping ping(Pbeer tag:fd)}
-         {ComLayer sendTo(Pbeer pong(@SelfPbeer tag:fd) log:faildet)}
+      proc {Ping ping(Pbeer timestamp:SentTime tag:fd)}
+         {ComLayer sendTo(Pbeer pong(@SelfPbeer timestamp:SentTime tag:fd) log:faildet)}
       end
 
-      proc {Pong pong(Pbeer tag:fd)}
+      proc {Pong pong(Pbeer timestamp:SentTime tag:fd)}
+         CurrentConnection
+         RTList
+         CurrentRTT
+         CurrentRefTime
+         in
+         CurrentRefTime = {BootTime.getReferenceTime} 
+         CurrentRTT = CurrentRefTime-SentTime
+         CurrentConnection = {Record.adjoinAt {PbeerList.retrievePbeer Pbeer.id @Connections} 								last_response CurrentRefTime}
+         RTList = {ModifyABoundedList CurrentRTT CurrentConnection.rtt_history}
+         Connections := {PbeerList.edit {Record.adjoinAt CurrentConnection 
+                                          rtt_history RTList} @Connections}
          Alive := {PbeerList.add Pbeer @Alive}
       end
 
@@ -170,7 +249,6 @@ define
                   stopMonitor:   StopMonitor
                   start:         NewRound
                   timeout:       Timeout
-                  checklowtimeout:  CheckLowTimeout
                   )
    in
       Pbeers      = {NewCell {PbeerList.new}}

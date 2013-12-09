@@ -95,6 +95,7 @@ define
                   signalLinkDelay: ComLayer
                   signalLowLinkDelay: ComLayer
                   signalNoLinkDelay:  ComLayer
+                  simulateALinkDelay: ComLayer
                   )
    in
       ComLayer       = {Pbeerp2p.new}

@@ -36,6 +36,8 @@ export
    Fanout
    MLookupsPerPeriod
 
+   IsVisual
+
 define
 
    Abort       = 'ABORT'      % 
@@ -54,9 +56,11 @@ define
    NoValue  = NotFound
    NoSecret = Public
 
-  %%ReCircle Parameters
+   %%ReCircle Parameters
    Fanout = 1                 % Acceptable Values 1-5
    MLookupsPerPeriod = 2      % Acceptable Values 1-5 and 100, 100 implies infinity
+
+   IsVisual = 0               % Flag to turn on visual debug messages
 
 end
 

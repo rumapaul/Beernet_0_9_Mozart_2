@@ -37,6 +37,7 @@ import
    KeyRanges   at '../../utils/KeyRanges.ozf'
    RingList    at '../../utils/RingList.ozf'
    Utils       at '../../utils/Misc.ozf'
+   
 export
    New
 define
@@ -138,11 +139,17 @@ define
          Msg = Event.msg
 	 Src = Event.src
 	 Target = Event.to
+         ClosestTarget
       in
          if {Not {Record.label Msg} == join} then
             {Monitor monitor(Src)}
          end
-         {@ComLayer sendTo({ClosestPrecedingFinger Target} Event)}
+         ClosestTarget = {ClosestPrecedingFinger Target}
+         if ClosestTarget \= nil then
+            {@ComLayer sendTo(ClosestTarget Event)}
+         else
+            {@ComLayer sendTo({@Node getSucc($)} Event)}
+         end
       end
 
       proc {SetComLayer setComLayer(NewComLayer)}
