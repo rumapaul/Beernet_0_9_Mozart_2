@@ -43,7 +43,7 @@
 
 functor
 import
-   System
+   %System
    Component   at '../corecomp/Component.ozf'
    Pp2p        at 'Pp2p.ozf'
    PbeerIdList   at '../utils/PbeerIdList.ozf'
