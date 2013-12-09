@@ -103,8 +103,8 @@ define
       CurrentVariance = {CalculateVarianceStep L AvgRTT} div CurrentCount
       CurrentStDev = {Float.toInt {Float.ceil {Float.sqrt {Int.toFloat CurrentVariance}}}}
 
-      %RetVal = {Value.max (AvgRTT + CurrentVariance) MIN_TIMEOUT}
-      RetVal = {Value.max (AvgRTT + CurrentStDev) MIN_TIMEOUT}
+      %RetVal = {Value.max (AvgRTT + 3*CurrentVariance) MIN_TIMEOUT}
+      RetVal = {Value.max (AvgRTT + 2*CurrentStDev) MIN_TIMEOUT}
       
       RetVal
    end
@@ -196,8 +196,8 @@ define
            end
            %% Clear up and get ready for new ping round
            Alive       := {PbeerList.remove Pbeer @Alive}
-           if {List.length CurrentConnection.rtt_history} > 0 then
-           %if {List.length CurrentConnection.rtt_history} >= BUFFER_LIMIT then
+           %if {List.length CurrentConnection.rtt_history} > 0 then
+           if {List.length CurrentConnection.rtt_history} >= BUFFER_LIMIT then
            	NewTimeout = {CalculateTimeout CurrentConnection.rtt_history}
            else
                 NewTimeout = INIT_TIMEOUT
