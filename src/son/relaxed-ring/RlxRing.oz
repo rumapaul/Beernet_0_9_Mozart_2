@@ -238,31 +238,31 @@ define
               {@Logger event(@SelfRef.id alive(Pbeer.id) color:green)}
          end
          {@Logger stat(src:@SelfRef.id msg:alive pointer:Pbeer.id)}
+         {@FingerTable monitor(Pbeer)}
          if {BelongsTo Pbeer.id @Pred.id @SelfRef.id-1} then
             OldPred = @Pred.id
             in
             PredList := {AddToList Pbeer @PredList}
             Pred := Pbeer %% Monitoring Pbeer and it's on predList
-            {Monitor Pbeer}
-            {@FingerTable monitor(Pbeer)}
+            %{Monitor Pbeer}
+            
             if IS_VISUAL_DEBUG == 1 then
                  {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
                  {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO:Not always correct
             end
             {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:pred)}
-         end
-         if {BelongsTo Pbeer.id @SelfRef.id @Succ.id-1} then
+         elseif {BelongsTo Pbeer.id @SelfRef.id @Succ.id-1} then
             OldSucc = @Succ.id
-            in
-            %SuccList := {AddToList Pbeer @SuccList}   
+            in   
             Succ := Pbeer
-            {Monitor Pbeer}
-            {@FingerTable monitor(Pbeer)}
+            %{Monitor Pbeer}
             {Zend @Succ fix(src:@SelfRef)}
             if IS_VISUAL_DEBUG == 1 then
                  {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
             end
             {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:succ)}
+         %else
+         %   {MakeAQueueInsert makeAQueueInsert(Pbeer)}
          end 
       end
 
