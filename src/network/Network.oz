@@ -89,13 +89,15 @@ define
                   setId:         SetId
                   setLogger:     ComLayer
                   signalDestroy: SignalDestroy
+                  setFDParams: 	 FailDetector
                   stopMonitor:   FailDetector
 		  signalALinkFailure: ComLayer 
                   signalALinkRestore: ComLayer
-                  signalLinkDelay: ComLayer
-                  signalLowLinkDelay: ComLayer
-                  signalNoLinkDelay:  ComLayer
+                  %injectLinkDelay: ComLayer
+                  %injectLowLinkDelay: ComLayer
+                  %injectNoLinkDelay:  ComLayer
                   simulateALinkDelay: ComLayer
+                  injectDelayVariance: ComLayer
                   )
    in
       ComLayer       = {Pbeerp2p.new}
