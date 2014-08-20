@@ -35,7 +35,7 @@
 
 functor
 import
-   System
+   %System
    Component   at '../corecomp/Component.ozf'
    Constants   at '../commons/Constants.ozf'
    Timer       at '../timer/Timer.ozf'
@@ -150,10 +150,10 @@ define
          DoBulk
       in
          if @RSetOK then 
-            {System.show 'Bulking to the Bulk set'}
+            %{System.show 'Bulking to the Bulk set'}
             DoBulk = BulkToRSet
          else
-            {System.show 'using the regular bulk'}
+            %{System.show 'using the regular bulk'}
             DoBulk = Bulk
          end
          {DoBulk bulk(Msg to:Key)}
