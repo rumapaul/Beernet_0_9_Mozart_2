@@ -26,6 +26,7 @@
 
 functor
 import
+   %System
    Component      at '../corecomp/Component.ozf'
    Constants      at '../commons/Constants.ozf'
    Utils          at '../utils/Misc.ozf'
@@ -41,7 +42,7 @@ export
    New
 define
 
-   Debug = Utils.blabla
+   %Debug = Utils.blabla
 
    fun {New CallArgs}
       Self
@@ -63,7 +64,7 @@ define
                      twophase:   TwoPhaseTM
                      valueset:   ValueSetTM
                      )
-      TPmakers = tms(eagerpaxos: EagerPaxosTP
+      TPmakers = tps(eagerpaxos: EagerPaxosTP
                      paxos:      PaxosTP
                      twophase:   TwoPhaseTP
                      valueset:   ValueSetTP
@@ -80,6 +81,18 @@ define
       in
          TheObjs = {Dictionary.condGet TransDict Tid objs}
          TransDict.Tid := {Record.adjoinAt TheObjs ObjId Obj}
+      end
+
+      proc {ApplyEventAllTransObj TransDict Event}	%% RRP
+	AllEntries = {Dictionary.entries TransDict}
+        in 
+	{List.forAll AllEntries
+            proc {$ K#I}
+	       {Record.forAll I 
+			proc {$ Obj} 
+			    {Obj Event} 
+                        end}
+            end}
       end
 
       %% === Events =========================================================
@@ -108,7 +121,7 @@ define
                                           maxKey:@MaxKey)}
          {TM setMsgLayer(@MsgLayer)}
          {TM setReplica(@Replica)}
-         {Debug 'Trap: TM object created and ready to call the transaciton'}
+         %{Debug 'Trap: TM object created and ready to call the transaciton'}
          {AddTransObj TMs {TM getTid($)} {TM getId($)} TM}
          {Trans TM}
       end
@@ -143,6 +156,7 @@ define
             {RTM setMsgLayer(@MsgLayer)}
             {RTM setReplica(@Replica)}
             {AddTransObj TMs Tid {RTM getId($)} RTM}
+	    {@MsgLayer dmsg(monitor(Event.leader.ref))}
             {RTM Event}
          end
       end
@@ -203,9 +217,66 @@ define
           end
       end
 
+      proc {NewResponsibilities newResponsibilities(old:OldPredId new:NewPredId tag:trapp)}
+	proc {DataLoop Tos}
+            case Tos
+            of (To|MoreTos) then
+               {@MsgLayer send(doMigration(left:NewPredId right:OldPredId dest:@NodeRef hkey:To tag:trapp) to:To)}
+               %% Carry on with the migration
+               {DataLoop MoreTos}
+            [] nil then
+               skip
+            end
+         end
+         OldReplicaList
+      in
+         OldReplicaList = {@Replica getReverseKeys(OldPredId $)}
+         {DataLoop OldReplicaList}
+      end
+
+      proc {DoMigration doMigration(left:FromId right:ToId dest:Dest hkey:_ tag:trapp)}
+           proc {DataLoop Froms Tos}
+            case Froms#Tos
+            of (From|MoreFroms)#(To|MoreTos) then
+               PairEntries SetEntries
+            in
+               %% Migrating data of paxos, eagerpaxos and twophase
+               %% They all use PairsDB, refering with DBs.paxos
+               {DBs.paxos dumpRange(From To PairEntries)}
+               {@MsgLayer dsend(to:Dest insertDataAttempt(entries:PairEntries
+                                                      db:paxos
+                                                      tag:trapp))}
+               %% Migrating data of the valueset abstraction
+               {DBs.valueset dumpRange(From To SetEntries)}
+               {@MsgLayer dsend(to:Dest insertDataAttempt(entries:SetEntries
+                                                      db:valueset
+                                                      tag:trapp))}
+               %% Carry on with the migration
+               {DataLoop MoreFroms MoreTos}
+            [] nil#nil then
+               skip
+            end
+         end
+         FromList
+         ToList
+      in
+         thread
+            %% Safe thread. Does not modify state
+            FromList = FromId|{@Replica getReverseKeys(FromId $)}
+            ToList   = ToId|{@Replica getReverseKeys(ToId $)}
+            {DataLoop FromList ToList}
+          end
+      end
+
       proc {InsertData insertData(entries:Entries db:DB tag:trapp)}
          if Entries \= nil then
             {DBs.DB insert(Entries _/*Result*/)}
+         end
+      end
+
+      proc {InsertDataAttempt insertDataAttempt(entries:Entries db:DB tag:trapp)}
+         if Entries \= nil then
+            {DBs.DB insertNewest(Entries _/*Result*/)}
          end
       end
 
@@ -222,6 +293,10 @@ define
       %proc {SetTimeout setTimeout(ATime)}
       %   Timeout := ATime
       %end
+
+      proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trappist)}
+	{ApplyEventAllTransObj TMs isATMCrashed(Pbeer)}
+      end
 
       Events = events(
                      %% Trappist's API
@@ -248,12 +323,16 @@ define
                      final:         Final
                      %% Data management
                      insertData:    InsertData
+                     insertDataAttempt: InsertDataAttempt
+                     doMigration:   DoMigration
                      newPred:       NewPred
+                     newResponsibilities: NewResponsibilities
                      %% Internal to the Pbeer
                      setMsgLayer:   SetMsgLayer
                      setReplica:    SetReplica
                      %setTimeout:    SetTimeout
                      %timeout:       TimeoutEvent
+		     nodeCrash:	     HandleNodeCrash
                      )
 
    in
@@ -262,7 +341,7 @@ define
       in
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
-%         Listener = FullComponent.listener
+         %Listener = FullComponent.listener
       end
       NodeRef  = {NewCell noref}
       MsgLayer = {NewCell Component.dummy}

@@ -43,15 +43,15 @@ export
 
 define
 
-   DELTA       = 500    % Granularity to tune the link delay (in sync with failure detector)
-   INIT_DELAY     = 0   % Initial Delay value
-   MAX_DELAY = 2000   % Delay must not go beyond this value
+   %DELTA       = 500    % Granularity to tune the link delay (in sync with failure detector)
+   %INIT_DELAY     = 0   % Initial Delay value
+   %MAX_DELAY = 2000   % Delay must not go beyond this value
 
    fun {New}
       SitePort       % Port to receive messages
       Listener       % Upper layer component
       FullComponent  % This component
-      DelayPeriod      % Link Delay Knob 
+      %DelayPeriod      % Link Delay Knob 
       AllLinkDelays   %Delay Periods for All links
 
       proc {GetPort getPort(P)}
@@ -61,9 +61,9 @@ define
       proc {PP2PSend pp2pSend(Dest Msg)}
          try
             thread
-               if @DelayPeriod > 0 then
+               /*if @DelayPeriod > 0 then
                   {Delay @DelayPeriod}
-               end
+               end*/
                if {Value.hasFeature @AllLinkDelays Dest.id} then
                    {Delay @AllLinkDelays.(Dest.id)}
                end
@@ -90,20 +90,41 @@ define
          end
       end
 
-      proc {InjectLinkDelay injectLinkDelay}
+      /*proc {InjectLinkDelay injectLinkDelay}
           if @DelayPeriod + DELTA =< MAX_DELAY then
               DelayPeriod := @DelayPeriod + DELTA
           end
-      end
+      end*/
 
-      proc {InjectLowLinkDelay injectLowLinkDelay}
+      /*proc {InjectLowLinkDelay injectLowLinkDelay}
           if @DelayPeriod > INIT_DELAY then
               DelayPeriod := @DelayPeriod - DELTA
           end
-      end
+      end*/
 
-      proc {InjectNoLinkDelay injectNoLinkDelay}
+      /*proc {InjectNoLinkDelay injectNoLinkDelay}
           DelayPeriod := INIT_DELAY
+      end*/
+
+       proc {InjectDelayVariance injectDelayVariance(Dest PeriodToVary DirectionFlag)}
+          CurrentDelay
+          in
+          if {Value.hasFeature @AllLinkDelays Dest} then
+              CurrentDelay = @AllLinkDelays.Dest
+          else 
+              CurrentDelay = 0
+          end 
+          if DirectionFlag == 1 then
+             AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest (CurrentDelay+PeriodToVary)}
+          else
+             NewDelay = CurrentDelay - PeriodToVary
+             in
+             if NewDelay > 0 then
+                AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest NewDelay}
+             else
+                AllLinkDelays := {Record.subtract @AllLinkDelays Dest}
+             end
+          end
       end
 
       proc {SimulateALinkDelay simulateALinkDelay(Dest Period)}
@@ -117,14 +138,15 @@ define
       Events = events(
                   getPort:            GetPort
                   pp2pSend:           PP2PSend
-                  injectLinkDelay:    InjectLinkDelay
-                  injectLowLinkDelay: InjectLowLinkDelay
-                  injectNoLinkDelay:  InjectNoLinkDelay
+                  %injectLinkDelay:    InjectLinkDelay
+                  %injectLowLinkDelay: InjectLowLinkDelay
+                  %injectNoLinkDelay:  InjectNoLinkDelay
+                  injectDelayVariance: InjectDelayVariance
                   simulateALinkDelay: SimulateALinkDelay
                   )
 
    in
-      DelayPeriod = {NewCell INIT_DELAY}
+      %DelayPeriod = {NewCell INIT_DELAY}
       AllLinkDelays = {NewCell linkdelays(name:simulateddelays)}
       local
          Stream

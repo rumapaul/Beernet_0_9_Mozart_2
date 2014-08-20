@@ -3,7 +3,7 @@
  * PbeerIdList.oz
  *
  *    This files contains general functions asociated with list of PBeer Ids. 
- *    Lists are sorted.
+ *    Lists are sorted. It can also be used for a sorted list of integers.
  *
  * LICENSE
  *
@@ -25,6 +25,7 @@ export
    AddId
    RemoveId
    IsIdIn
+   GetIndex
    New
 
 define
@@ -58,6 +59,23 @@ define
          end
       [] nil then
          false
+      end
+   end
+
+   %% Return index if PeerId is found in list L, otherwise return 0
+   %% Precondition: L is sorted
+   fun {GetIndex PeerId L Index}
+      case L
+      of H|T then
+         if H == PeerId then
+            Index
+         elseif H < PeerId then
+            {GetIndex PeerId T Index+1}
+         else
+            0
+         end
+      [] nil then
+         0
       end
    end
 

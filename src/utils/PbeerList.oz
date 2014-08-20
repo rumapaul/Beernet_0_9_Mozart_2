@@ -32,6 +32,7 @@ export
    Minus
    New
    Remove
+   RemoveId
    RemoveLast
    RetrievePbeer  
    Union
@@ -177,6 +178,20 @@ define
             T
          else
             H|{Remove Peer T}
+         end
+      [] nil then
+         nil
+      end
+   end
+
+   %% Remove a Peer from a List
+   fun {RemoveId PeerId L}
+      case L
+      of H|T then
+         if H.id == PeerId then
+            T
+         else
+            H|{Remove PeerId T}
          end
       [] nil then
          nil

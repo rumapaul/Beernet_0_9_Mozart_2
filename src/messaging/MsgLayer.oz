@@ -28,7 +28,7 @@
 
 functor
 import
-   System
+   %System
    Component   at '../corecomp/Component.ozf'
    Timer       at '../timer/Timer.ozf'
    Utils       at '../utils/Misc.ozf'
@@ -129,7 +129,7 @@ define
                {TheTimer startTrigger(@Timeout timeout(MsgId) Self)}
                Msgs.MsgId := {Record.adjoinAt Data c Data.c-1}
             else
-               {System.show 'msg '#MsgId#':'#{Label Data.msg}#' never arrived'}
+               %{System.show 'msg '#MsgId#':'#{Label Data.msg}#' never arrived'}
                Data.outcome = false
                {Dictionary.remove Msgs MsgId}
             end

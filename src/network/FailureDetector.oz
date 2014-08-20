@@ -47,14 +47,14 @@ export
    New
 define
 
-   INIT_TIMEOUT = 500   % Initial Timeout value
+   INIT_TIMEOUT = 1000   % Initial Timeout value
    MIN_TIMEOUT = 100     % Minimum Timeout value
-   BUFFER_LIMIT = 20 	% Recent History of Round Trip Time
-   MONITORING_LIMIT = 75 % Maximum nodes that will be monitored by a node for a network size of 50
+   %BUFFER_LIMIT = 30 	% Recent History of Round Trip Time
+   MONITORING_LIMIT = 200 % Maximum nodes that will be monitored by a node for a network size of 50
 
    %% Add an element at the end of list.
    %% Return the new list as result
-   fun {ModifyABoundedList Element L}
+   fun {ModifyABoundedList Element L Bound}
       fun {Insert E List}
          case List
             of H|T then
@@ -74,7 +74,7 @@ define
       NewList
       in
      
-      if {List.length L} >= BUFFER_LIMIT then
+      if {List.length L} >= Bound then
           NewList = {Delete L}
       else
           NewList = L
@@ -82,7 +82,7 @@ define
       {Insert Element NewList}
    end
 
-   fun {CalculateTimeout L}
+   fun {CalculateTimeout L Coeff1 Coeff2}
       fun {CalculateVarianceStep List Avg}
          case List
             of H|T then
@@ -104,7 +104,7 @@ define
       CurrentStDev = {Float.toInt {Float.ceil {Float.sqrt {Int.toFloat CurrentVariance}}}}
 
       %RetVal = {Value.max (AvgRTT + 3*CurrentVariance) MIN_TIMEOUT}
-      RetVal = {Value.max (AvgRTT + 2*CurrentStDev) MIN_TIMEOUT}
+      RetVal = {Value.max (Coeff1*AvgRTT + Coeff2*CurrentStDev) MIN_TIMEOUT}
       
       RetVal
    end
@@ -144,6 +144,11 @@ define
       Pbeers      % Pbeers to be monitored
       Connections   % Connection parameters for all the monitored Pbeers
       TheTimer    % Component that triggers timeout
+
+      % Parameters of FD
+      Buffer_Limit_k
+      Std_Dev_Coeff_m2
+      Avg_Coeff_m1
 
       %% Sends a ping message to all monitored pbeers and launch the timer
       proc {NewRound start(Pbeer T)}
@@ -197,8 +202,9 @@ define
            %% Clear up and get ready for new ping round
            Alive       := {PbeerList.remove Pbeer @Alive}
            %if {List.length CurrentConnection.rtt_history} > 0 then
-           if {List.length CurrentConnection.rtt_history} >= BUFFER_LIMIT then
-           	NewTimeout = {CalculateTimeout CurrentConnection.rtt_history}
+           if {List.length CurrentConnection.rtt_history} >= @Buffer_Limit_k then
+           	NewTimeout = {CalculateTimeout CurrentConnection.rtt_history 
+                                                @Avg_Coeff_m1 @Std_Dev_Coeff_m2}
            else
                 NewTimeout = INIT_TIMEOUT
            end
@@ -221,7 +227,7 @@ define
          CurrentRefTime = {BootTime.getReferenceTime} 
          CurrentRTT = CurrentRefTime-SentTime
          CurrentConnection = {Record.adjoinAt {PbeerList.retrievePbeer Pbeer.id @Connections} 								last_response CurrentRefTime}
-         RTList = {ModifyABoundedList CurrentRTT CurrentConnection.rtt_history}
+         RTList = {ModifyABoundedList CurrentRTT CurrentConnection.rtt_history @Buffer_Limit_k}
          Connections := {PbeerList.edit {Record.adjoinAt CurrentConnection 
                                           rtt_history RTList} @Connections}
          Alive := {PbeerList.add Pbeer @Alive}
@@ -236,8 +242,19 @@ define
          SelfPbeer := {ComLayer getRef($)} 
       end
 
+      proc {SetFDParams setFDParams(FDParamRecord)}
+         Buffer_Limit_k := FDParamRecord.k
+         Std_Dev_Coeff_m2 := FDParamRecord.m2
+         Avg_Coeff_m1 := FDParamRecord.m1
+      end
+
       proc {StopMonitor stopMonitor(Pbeer)}
-         Pbeers := {PbeerList.remove Pbeer @Pbeers}
+         %{System.showInfo "Reached FD"}
+         if {Record.is Pbeer} then
+            Pbeers := {PbeerList.remove Pbeer @Pbeers}
+         else
+            Pbeers := {PbeerList.removeId Pbeer @Pbeers}
+         end
       end
 
       Events = events(
@@ -246,6 +263,7 @@ define
                   pong:          Pong
                   setPbeer:      SetPbeer
                   setComLayer:   SetComLayer
+                  setFDParams:   SetFDParams
                   stopMonitor:   StopMonitor
                   start:         NewRound
                   timeout:       Timeout
@@ -258,6 +276,10 @@ define
 
       SelfPbeer   = {NewCell pbeer(id:~1 port:_)}
       TheTimer    = {Timer.new}
+
+      Buffer_Limit_k = {NewCell 30}
+      Std_Dev_Coeff_m2 = {NewCell 4}
+      Avg_Coeff_m1 = {NewCell 1}
 
       Self        = {Component.new Events}
       Listener    = Self.listener

@@ -117,6 +117,36 @@ define
          Result = unit
       end
 
+      %% Insert a list of list into the dictionary of dictionaries.
+      proc {InsertNewest insertNewest(Entries Result)}
+         proc {InsertLoop Key1 Items}
+            case Items
+            of (Key2#Val)|MoreItems then
+               CurrentVal
+               in
+	       if {Not Val.locked} then
+               	   {Get get(Key1 Key2 CurrentVal)}
+               	   if CurrentVal == NO_VALUE orelse 
+				({Not CurrentVal.locked} andthen CurrentVal.version < Val.version) then
+                  	{Put put(Key1 Key2 Val)}
+		   end
+               end
+               {InsertLoop Key1 MoreItems}
+            [] nil then
+               skip
+            end
+         end
+      in
+         case Entries
+         of (Key#Items)|MoreEntries then
+            {InsertLoop Key Items}
+            {InsertNewest insertNewest(MoreEntries Result)}
+         [] nil then
+            skip
+         end
+         Result = unit
+      end
+
       Events = events(
                      %% basic operations
                      delete:     Delete
@@ -125,6 +155,7 @@ define
                      %% administration
                      dumpRange:  DumpRange
                      insert:     Insert
+                     insertNewest:	InsertNewest
                      )
    in
       Self = {Component.newTrigger Events}
