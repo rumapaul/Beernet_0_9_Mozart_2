@@ -120,9 +120,10 @@ define
             LogTag = network
          end
          if Dest\=nil then
-             if Constants.isVisual == 0 then
-         	{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
-             end
+             %Turn-on this code block if #of messages is required for stat
+             %if Constants.isVisual == 0 then 
+             	%{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
+            % end
 	     %{@Logger out(MsgId @SelfId {ThisThreadId} Dest.id color:blue)}
              if {Not {PbeerIdList.isIdIn Dest.id @FailedLinks}} then
                 {@ComLayer pp2pSend(Dest '#'(@SelfId MsgId Msg))}
@@ -151,19 +152,7 @@ define
          FailedLinks := {PbeerIdList.removeId TargetId @FailedLinks}
       end
 
-     proc {SignalLinkDelay signalLinkDelay}
-         {@ComLayer injectLinkDelay}
-     end
-
-     proc {SignalLowLinkDelay signalLowLinkDelay}
-         {@ComLayer injectLowLinkDelay}
-     end
-
-     proc {SignalNoLinkDelay signalNoLinkDelay}
-         {@ComLayer injectNoLinkDelay}
-     end
-
-     proc {SimulateALinkDelay Event}
+     proc {FwdEventsToComLayer Event}
          {@ComLayer Event}
      end
 
@@ -177,10 +166,11 @@ define
                   setLogger:     SetLogger
                   signalALinkFailure: SignalALinkFailure
                   signalALinkRestore: SignalALinkRestore
-                  signalLinkDelay: SignalLinkDelay
-                  signalLowLinkDelay: SignalLowLinkDelay
-                  signalNoLinkDelay:  SignalNoLinkDelay
-                  simulateALinkDelay: SimulateALinkDelay
+                  %injectLinkDelay: FwdEventsToComLayer
+                  %injectLowLinkDelay: FwdEventsToComLayer
+                  %injectNoLinkDelay:  FwdEventsToComLayer
+                  simulateALinkDelay: FwdEventsToComLayer
+                  injectDelayVariance: FwdEventsToComLayer
                   )
    in
       ComLayer    = {NewCell {Pp2p.new}}
