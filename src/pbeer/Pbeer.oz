@@ -292,17 +292,20 @@ define
                      getRingRef:       ToNode
                      getSucc:          ToNode
                      injectPermFail:   InjectPermFail
-		     injectLinkFail:   ToNode	%R
-                     injectLinkDelay:  ToNode
-                     restoreLink:       ToNode
-                     simulateALinkDelay: ToNode
+		     signalALinkFailure:   ToNode	%R
+                     %injectLinkDelay:     ToNode
+                     injectDelayVariance:  ToNode
+                     signalALinkRestore:   ToNode
+                     simulateALinkDelay:   ToNode
+                     monitor:		   ToNode
+                     stopMonitor:	   ToNode
                      join:             Join
                      leave:            Leave
                      lookup:           ToNode
                      lookupHash:       ToNode
-                     noLinkDelay:      ToNode
+                     %injectNoLinkDelay:      ToNode
                      receive:          ReceiveTagged
-                     reduceLinkDelay:  ToNode
+                     %injectLowLinkDelay:  ToNode
                      refreshFingers:   ToNode
                      send:             SendTagged
                      setLogger:        ToNode
