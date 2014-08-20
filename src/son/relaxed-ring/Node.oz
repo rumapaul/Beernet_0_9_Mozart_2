@@ -52,27 +52,7 @@ define
          {Suicide}
       end
 
-      proc {InjectLinkFail injectLinkFail(ToPbeerId)}
-	 {ComLayer signalALinkFailure(ToPbeerId)}
-      end
-
-      proc {RestoreLink restoreLink(ToPbeerId)}
-         {ComLayer signalALinkRestore(ToPbeerId)}
-      end
-
-      proc {InjectLinkDelay injectLinkDelay}
-         {ComLayer signalLinkDelay}
-      end
-
-      proc {ReduceLinkDelay reduceLinkDelay}
-         {ComLayer signalLowLinkDelay}
-      end
-
-      proc {NoLinkDelay noLinkDelay}
-         {ComLayer signalNoLinkDelay}
-      end
-
-      proc {SimulateALinkDelay Event}
+      proc {FwdEventToComLayer Event}
          {ComLayer Event}
       end
 
@@ -80,12 +60,15 @@ define
                   any:              RlxRingNode
                   setListener:      RlxRingNode
                   injectPermFail:   InjectPermFail
-	          injectLinkFail:   InjectLinkFail
-                  restoreLink:      RestoreLink
-                  injectLinkDelay:  InjectLinkDelay
-                  reduceLinkDelay:  ReduceLinkDelay
-                  noLinkDelay:      NoLinkDelay
-                  simulateALinkDelay: SimulateALinkDelay
+	          signalALinkFailure:   FwdEventToComLayer
+                  signalALinkRestore:   FwdEventToComLayer
+                  %injectLinkDelay:     FwdEventToComLayer
+                  %injectLowLinkDelay:  FwdEventToComLayer
+                  %injectNoLinkDelay:   FwdEventToComLayer
+                  simulateALinkDelay:   FwdEventToComLayer
+                  injectDelayVariance:  FwdEventToComLayer
+		  monitor:		FwdEventToComLayer
+                  stopMonitor:	        FwdEventToComLayer
                   )
    in
       local
