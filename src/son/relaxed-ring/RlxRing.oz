@@ -45,8 +45,8 @@ import
    RingList    at '../../utils/RingList.ozf'
    TimerMaker  at '../../timer/Timer.ozf'
    Utils       at '../../utils/Misc.ozf'
-   PeriodicStabilizer at 'PeriodicStabilizer.ozf'
-   Merger      at 'Merger.ozf'
+   %PeriodicStabilizer at 'PeriodicStabilizer.ozf'
+   %Merger      at 'Merger.ozf'
 
 export
    New
@@ -76,8 +76,8 @@ define
       PredList    % To remember peers that haven't acked joins of new preds
       Ring        % Ring Reference ring(name:<atom> id:<name>)
       FingerTable % Routing table 
-      SelfStabilizer  % Periodic Stalizer
-      SelfMerger  % Merge Module
+      %SelfStabilizer  % Periodic Stalizer
+      %SelfMerger  % Merge Module
       Self        % Full Component
       SelfRef     % Pbeer reference pbeer(id:<Id> port:<Port>)
       Succ        % Reference to the successor
@@ -130,10 +130,10 @@ define
       in
          if ThePred \= nil then
             {Zend ThePred Event}
-         else
+         %else
             %%TODO: acknowledge somehow that the message is lost
-            {System.showInfo "Something went wrong, I cannot backward msg"}
-            skip
+         %   {System.showInfo "Something went wrong, I cannot backward msg"}
+         %   skip
          end
       end
 
@@ -142,10 +142,10 @@ define
       in
          if ThePred \= nil then
             {Zend ThePred Event}
-         else
+         %else
             %%TODO: acknowledge somehow that the message is lost
-            {System.showInfo "Something went wrong, I cannot backward msg"}
-            skip
+         %   {System.showInfo "Something went wrong, I cannot backward msg"}
+         %   skip
          end
       end
 
@@ -195,7 +195,6 @@ define
             if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id-1} then
                 OldSucc = @Succ.id
                 in
-                %{System.showInfo "In Update, at:"#@SelfRef.id#" Succ:"#CandidatePbeer.id}
 	        Succ := CandidatePbeer
                 {Monitor CandidatePbeer}
                 {@FingerTable monitor(CandidatePbeer)}
@@ -203,15 +202,16 @@ define
                      {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
                 end
             elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
-                OldPred = @Pred.id
+                OldPred = @Pred
                 in
-                 %{System.showInfo "In Update Pred, at:"#@SelfRef.id#" Pred:"#CandidatePbeer.id}
                  PredList := {AddToList CandidatePbeer @PredList}
                  Pred := CandidatePbeer 
                  {Monitor CandidatePbeer}
                  {@FingerTable monitor(CandidatePbeer)}
+		 %% Tell data management to migrate data in range ]OldPred, Pred]
+            	 {@Listener newPred(old:OldPred new:@Pred tag:data)}
                  if IS_VISUAL_DEBUG == 1 then
-                      {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
+                      {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
                       {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO: Check
                  end
             end
@@ -234,33 +234,33 @@ define
 
       proc {Alive alive(Pbeer)}
          Crashed  := {PbeerList.remove Pbeer @Crashed}
-         if IS_VISUAL_DEBUG == 1 then
-              {@Logger event(@SelfRef.id alive(Pbeer.id) color:green)}
-         end
-         {@Logger stat(src:@SelfRef.id msg:alive pointer:Pbeer.id)}
+         %if IS_VISUAL_DEBUG == 1 then
+         %     {@Logger event(@SelfRef.id alive(Pbeer.id) color:green)}
+         %end
+         %{@Logger stat(src:@SelfRef.id msg:alive pointer:Pbeer.id)}
          {@FingerTable monitor(Pbeer)}
          if {BelongsTo Pbeer.id @Pred.id @SelfRef.id-1} then
-            OldPred = @Pred.id
+            OldPred = @Pred
             in
             PredList := {AddToList Pbeer @PredList}
             Pred := Pbeer %% Monitoring Pbeer and it's on predList
-            %{Monitor Pbeer}
+            %% Tell data management to migrate data in range ]OldPred, Pred]
+            {@Listener newPred(old:OldPred new:@Pred tag:data)}
             
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred) color:darkblue)}
-                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO:Not always correct
-            end
-            {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:pred)}
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
+            %     {@Logger event(@SelfRef.id onRing(true) color:darkblue)} %TODO:Not always correct
+            %end
+            %{@Logger stat(src:@SelfRef.id new:@Pred.id msg:inconsistency pointer:pred)}
          elseif {BelongsTo Pbeer.id @SelfRef.id @Succ.id-1} then
-            OldSucc = @Succ.id
-            in   
+            %OldSucc = @Succ.id
+            %in   
             Succ := Pbeer
-            %{Monitor Pbeer}
             {Zend @Succ fix(src:@SelfRef)}
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
-            end
-            {@Logger stat(src:@SelfRef.id msg:inconsistency pointer:succ)}
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+            %end
+            %{@Logger stat(src:@SelfRef.id new:@Succ.id msg:inconsistency pointer:succ)}
          %else
          %   {MakeAQueueInsert makeAQueueInsert(Pbeer)}
          end 
@@ -283,30 +283,36 @@ define
          Crashed  := {PbeerList.add Pbeer @Crashed}
          SuccList := {RingList.remove Pbeer @SuccList}
          PredList := {RingList.remove Pbeer @PredList}
+	 {@Listener nodeCrash(node:Pbeer tag:trapp)}
          {@FingerTable removeFinger(Pbeer)}
-         {@Logger stat(src:@SelfRef.id msg:crash pointer:Pbeer.id)}
-         if IS_VISUAL_DEBUG == 1 then
-              {@Logger event(@SelfRef.id crash(Pbeer.id) color:red)}
-         end
+         %{@Listener nodeCrash(old:Pbeer.id new:@Pred.id tag:trapp)}
+         %{@Logger stat(src:@SelfRef.id msg:crash pointer:Pbeer.id)}
+         %if IS_VISUAL_DEBUG == 1 then
+         %     {@Logger event(@SelfRef.id crash(Pbeer.id) color:red)}
+         %end
          if Pbeer.id == @Succ.id then
             Succ := {RingList.getFirst @SuccList @SelfRef}
             {Monitor @Succ}
             {Zend @Succ fix(src:@SelfRef)}
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id succChanged(@Succ.id Pbeer.id) color:green)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id succChanged(@Succ.id Pbeer.id) color:green)}
+            %end
+            %{@Logger stat(src:@SelfRef.id msg:connsuspicion suspected:Pbeer.id pointer:succ)}
          end
          if Pbeer.id == @Pred.id then
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id onRing(false) color:darkblue)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id onRing(false) color:darkblue)}
+            %end
             if @PredList \= nil then
                %Pred := {RingList.getLast @PredList @Pred}
                Pred := {RingList.getLast @PredList @SelfRef}
                {Monitor @Pred}
-               if IS_VISUAL_DEBUG == 1 then
-                    {@Logger event(@SelfRef.id predChanged(@Pred.id Pbeer.id) color:darkblue)}
-               end
+               %% Tell data management to migrate data in range ]Pred, OldPred]
+               {@Listener newResponsibilities(old:Pbeer.id new:@Pred.id tag:trapp)}
+	       %if IS_VISUAL_DEBUG == 1 then
+               %     {@Logger event(@SelfRef.id predChanged(@Pred.id Pbeer.id) color:darkblue)}
+               %end
+               %{@Logger stat(src:@SelfRef.id msg:connsuspicion suspected:Pbeer.id pointer:pred)}
             end
          end
       end
@@ -331,8 +337,8 @@ define
       %% 2 - Src is in (pred, self]
       %% Otherwise is a better predecessor of pred.
       proc {Fix fix(src:Src)}
-	OldPred = @Pred.id
-	in
+	 OldPred = @Pred
+	 in
          %% Src thinks I'm its successor so I add it to the predList
          PredList := {AddToList Src @PredList}
          {Monitor Src}
@@ -340,18 +346,22 @@ define
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
             {Monitor Src}
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
-                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id predChanged(Src.id OldPred.id) color:darkblue)}
+            %     {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            %end
+            %% Tell data management to migrate data in range ]Pred, OldPred]
+            {@Listener newResponsibilities(old:OldPred.id new:@Pred.id tag:trapp)}
          elseif {BelongsTo Src.id @Pred.id @SelfRef.id-1} then
             Pred := Src %% Monitoring Src already and it's on predList
             {Zend Src fixOk(src:@SelfRef succList:@SuccList)}
             {Monitor Src}
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id predChanged(Src.id OldPred) color:darkblue)}
-                 {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id predChanged(Src.id OldPred.id) color:darkblue)}
+            %     {@Logger event(@SelfRef.id onRing(true) color:darkblue)}
+            %end
+            %% Tell data management to migrate data in range ]OldPred, Pred]
+            {@Listener newPred(old:OldPred new:@Pred tag:data)}
          else
             %{System.show 'GGGGGGGGGGRRRRRRRRRRRAAAAAAAAAA'#@SelfRef.id}
             %% Just keep it in a branch
@@ -447,9 +457,9 @@ define
                PredList := {AddToList @Pred @PredList}
                %% Tell data management to migrate data in range ]OldPred, Pred]
                {@Listener newPred(old:OldPred new:@Pred tag:data)}
-               if IS_VISUAL_DEBUG == 1 then
-                    {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
-               end
+               %if IS_VISUAL_DEBUG == 1 then
+               %     {@Logger event(@SelfRef.id predChanged(@Pred.id OldPred.id) color:darkblue)}
+               %end
             else
                %NOT FOR ME - going to route
                {RlxRoute Event Src.id}
@@ -481,9 +491,9 @@ define
                                           {@FingerTable monitor(Pbeer)}
                                        end}
             FirstAck = unit
-            if IS_VISUAL_DEBUG == 1 then
-	         {@Logger event(@SelfRef.id newSucc(@Succ.id) color:green)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+	    %     {@Logger event(@SelfRef.id newSucc(@Succ.id) color:green)}
+            %end
          end
          if {BelongsTo NewPred.id @Pred.id @SelfRef.id} then
             {Zend NewPred newSucc(newSucc:@SelfRef succList:@SuccList)}
@@ -492,9 +502,9 @@ define
             %% set a failure detector on the predecessor
             {Monitor NewPred} 
             {@FingerTable monitor(NewPred)}
-            if IS_VISUAL_DEBUG == 1 then
-                 {@Logger event(@SelfRef.id newPred(@Pred.id) color:green)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+            %     {@Logger event(@SelfRef.id newPred(@Pred.id) color:green)}
+            %end
          end
       end
 
@@ -515,7 +525,8 @@ define
       end
 
      proc {MakeAQueueInsert Event}
-         {SelfMerger Event}
+         %{SelfMerger Event}
+	skip
      end
 
      proc {MLookup Event}
@@ -538,8 +549,8 @@ define
       end
 
       proc {NewSucc newSucc(newSucc:NewSucc succList:NewSuccList)}
-	 OldSucc = @Succ.id
-	 in
+	 %OldSucc = @Succ.id
+	 %in
          if {BelongsTo NewSucc.id @SelfRef.id @Succ.id} then
             SuccList := {UpdateList @SuccList NewSucc NewSuccList}
             {Zend @Succ predNoMore(@SelfRef)}
@@ -552,10 +563,10 @@ define
             {RingList.forAll @SuccList proc {$ Pbeer}
                                           {@FingerTable monitor(Pbeer)}
                                        end}
-            if IS_VISUAL_DEBUG == 1 then
-	         {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
-	         {@Logger event(@Succ.id onRing(true) color:darkblue)}
-            end
+            %if IS_VISUAL_DEBUG == 1 then
+	    %     {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
+	    %     {@Logger event(@Succ.id onRing(true) color:darkblue)}
+            %end
          end
       end
 
@@ -716,10 +727,14 @@ define
       end
       SelfRef := {Record.adjoinAt @SelfRef port {@ComLayer getPort($)}}
       {@ComLayer setId(@SelfRef.id)}
+      
+      if {HasFeature Args fdParams} then
+         {@ComLayer setFDParams(Args.fdParams)}
+      end
 
-      SelfStabilizer = {PeriodicStabilizer.new}
-      {SelfStabilizer setComLayer(@ComLayer)}
-      {SelfStabilizer setListener(Self)}
+      %SelfStabilizer = {PeriodicStabilizer.new}
+      %{SelfStabilizer setComLayer(@ComLayer)}
+      %{SelfStabilizer setListener(Self)}
 
 
       Pred        = {NewCell @SelfRef}
@@ -732,9 +747,9 @@ define
       FingerTable = {NewCell BasicForward}
 
       %% For ReCircle
-      SelfMerger = {Merger.new}
-      {SelfMerger setComLayer(@ComLayer)}
-      {SelfMerger setListener(Self)}
+      %SelfMerger = {Merger.new}
+      %{SelfMerger setComLayer(@ComLayer)}
+      %{SelfMerger setListener(Self)}
      
       %% Return the component
       Self
