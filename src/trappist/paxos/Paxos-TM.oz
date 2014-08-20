@@ -32,6 +32,7 @@ import
    Constants      at '../../commons/Constants.ozf'
    Timer          at '../../timer/Timer.ozf'
    Utils          at '../../utils/Misc.ozf'
+   System
 export
    New
 define
@@ -144,6 +145,10 @@ define
                FinalDecision = if {GotAllBrewed} then commit else abort end
                Done := true
                {SpreadDecision FinalDecision}
+            %else	%% Test Code, timeout for vote acks from RTM
+            %   FinalDecision = abort
+            %   Done := true
+            %   {SpreadDecision FinalDecision} 
             end
          end
       end
@@ -233,19 +238,10 @@ define
          end
       end
 
-      %% === Events =========================================================
-
-      proc {Ack ack(key:Key tp:TP tid:_ tmid:_ tag:trapp)}
-         Acks.Key := TP | Acks.Key
-      end
-
-      proc {Vote FullVote}
-         Key = FullVote.key
-         Consensus
-      in
-         Votes.Key   := FullVote | Votes.Key
-         TPs.Key     := FullVote.tp | TPs.Key
-         Consensus   = {AnyMajority Key}
+     proc {CheckConsensus Key}
+        Consensus
+        in
+        Consensus   = {AnyMajority Key}
          if Consensus \= none then
             VotedItems := vote(key:Key consensus:Consensus) | @VotedItems
             if @Leader.id == Id then
@@ -259,7 +255,7 @@ define
                                         rtm:    @NodeRef
                                         tag:    trapp))}
             end
-         elseif Consensus == late andthen @Leader.id == Id then
+         /*elseif Consensus == late andthen @Leader.id == Id then
             thread
                {Wait FinalDecision}
                {@MsgLayer dsend(to:FullVote.tp.ref
@@ -267,7 +263,23 @@ define
                                       tid:Tid
                                       tpid:FullVote.tp.id
                                       tag:trapp))}
-            end
+            end*/
+         end
+     end
+
+      %% === Events =========================================================
+
+      proc {Ack ack(key:Key tp:TP tid:_ tmid:_ tag:trapp)}
+         Acks.Key := TP | Acks.Key
+      end
+
+      proc {Vote FullVote}
+         Key = FullVote.key
+      in
+         Votes.Key   := FullVote | Votes.Key
+         TPs.Key     := FullVote.tp | TPs.Key
+         if VotingPolls.Key == open then
+            {CheckConsensus Key}
          end
       end
 
@@ -432,8 +444,8 @@ define
                                         store:   {Dictionary.entries LocalStore}
                                         tag:     trapp
                                         ))} 
-            {Debug '#'('Going to start the validation... quick bulk to '
-                       @NodeRef.id)}
+            %{Debug '#'('Going to start the validation... quick bulk to '
+            %           @NodeRef.id)}
          else
             {Debug "Nothing to write.... just releasing logs"}
             {SpreadDecision commit}
@@ -452,10 +464,10 @@ define
       proc {Write write(k:Key v:Val s:Secret r:Result)}
          Item
       in
-         {Debug 'Going to write key'#Key#'with value'#Val}
+         %{Debug 'Going to write key'#Key#'with value'#Val}
          Item = {GetItem Key}
          {Wait Item}
-         {Debug 'Item retrieved'#Item}
+         %{Debug 'Item retrieved'#Item}
          %% Either creation of item orelse rewrite with correct secret
          if Item.version == 0
             orelse Item.secret == Secret
@@ -501,7 +513,15 @@ define
       end
 
       proc {TimeoutPoll timeoutPoll(Key)}
-         VotingPolls.Key := close
+         if VotingPolls.Key == open then
+            {System.showInfo "Timeout for:"#Key}
+            VotingPolls.Key := close
+            {CheckConsensus Key}
+         end
+      end
+
+      proc {IsATMCrashed isATMCrashed(Pbeer)}
+         {System.showInfo "Reached TM"}
       end
 
       Events = events(
@@ -527,6 +547,7 @@ define
                      setMsgLayer:   SetMsgLayer
                      setVotingPeriod:SetVotingPeriod
                      timeoutPoll:   TimeoutPoll
+                     isATMCrashed:  IsATMCrashed
                      )
    in
       local
@@ -551,7 +572,7 @@ define
       TPs         = {Dictionary.new}
       VotesAcks   = {Dictionary.new}
       VotingPolls = {Dictionary.new}
-      VotingPeriod= {NewCell 3000}
+      VotingPeriod= {NewCell 5000}
       RTMs        = {NewCell nil}
       VotedItems  = {NewCell nil}
       %AckedItems  = {NewCell nil}
