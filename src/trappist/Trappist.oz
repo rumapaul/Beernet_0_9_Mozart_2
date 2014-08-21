@@ -294,7 +294,7 @@ define
       %   Timeout := ATime
       %end
 
-      proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trappist)}
+      proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trapp)}
 	{ApplyEventAllTransObj TMs isATMCrashed(Pbeer)}
       end
 
