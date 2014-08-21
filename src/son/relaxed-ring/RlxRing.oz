@@ -283,7 +283,7 @@ define
          Crashed  := {PbeerList.add Pbeer @Crashed}
          SuccList := {RingList.remove Pbeer @SuccList}
          PredList := {RingList.remove Pbeer @PredList}
-	 {@Listener nodeCrash(node:Pbeer tag:trapp)}
+	 %{@Listener nodeCrash(node:Pbeer tag:trapp)}
          {@FingerTable removeFinger(Pbeer)}
          %{@Listener nodeCrash(old:Pbeer.id new:@Pred.id tag:trapp)}
          %{@Logger stat(src:@SelfRef.id msg:crash pointer:Pbeer.id)}
