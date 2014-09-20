@@ -39,6 +39,7 @@ define
    fun {New CallArgs}
       Self
       %Listener
+      Suicide
       MsgLayer
       NodeRef
       DB
@@ -81,6 +82,7 @@ define
                      key:     TrItem.key 
                      secret:  TrItem.secret
                      version: DBItem.version 
+                     leader:  TheLeader
                      tid:     Tid 
                      tp:      tp(id:Id ref:@NodeRef)
                      tag:     trapp)
@@ -126,6 +128,19 @@ define
                                              tmid:@Leader.id
                                              tp:  tp(id:Id ref:@NodeRef)
                                              tag: trapp))}
+         {Suicide} 
+      end
+
+      proc {LeaderChanged leaderChanged}
+         DBItem
+         in
+         DBItem = {@DB get(NewItem.hkey NewItem.item.key $)}
+         if DBItem \= NOT_FOUND then
+            {@DB put(NewItem.hkey DBItem.key {Record.adjoinAt DBItem locked false})}
+         else
+            {@DB delete(NewItem.hkey NewItem.item.key)}
+         end
+         {Suicide} 
       end
 
       %% --- Various --------------------------------------------------------
@@ -148,6 +163,7 @@ define
                      brew:          Brew
                      abort:         Abort
                      commit:        Commit
+                     leaderChanged: LeaderChanged
                      %% Various
                      getId:         GetId
                      setDB:        SetDB
@@ -159,6 +175,7 @@ define
       in
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
+         Suicide  = FullComponent.killer
          %Listener = FullComponent.listener
       end
       MsgLayer = {NewCell Component.dummy}
