@@ -26,7 +26,7 @@
 
 functor
 import
-   %System
+   System
    Component      at '../corecomp/Component.ozf'
    Constants      at '../commons/Constants.ozf'
    Utils          at '../utils/Misc.ozf'
@@ -83,6 +83,14 @@ define
          TransDict.Tid := {Record.adjoinAt TheObjs ObjId Obj}
       end
 
+      proc {RemoveTransObj TransDict Tid ObjId}
+         TheObjs
+      in
+         TheObjs = {Dictionary.condGet TransDict Tid objs}
+         %{TheObjs.ObjId signalDestroy}
+         TransDict.Tid := {Record.subtract TheObjs ObjId}
+      end
+
       proc {ApplyEventAllTransObj TransDict Event}	%% RRP
 	AllEntries = {Dictionary.entries TransDict}
         in 
@@ -121,7 +129,7 @@ define
                                           maxKey:@MaxKey)}
          {TM setMsgLayer(@MsgLayer)}
          {TM setReplica(@Replica)}
-         %{Debug 'Trap: TM object created and ready to call the transaciton'}
+         {TM setListener(Self)}
          {AddTransObj TMs {TM getTid($)} {TM getId($)} TM}
          {Trans TM}
       end
@@ -143,6 +151,11 @@ define
       end
 
       %% --- For the TMs ----------------------------------------------------
+      proc {DeleteTM Event}
+         %{System.showInfo "Reached Delete Procedure"}
+         {RemoveTransObj TMs Event.tid Event.tmid}
+      end
+
       proc {InitRTM Event}
          Client = Event.client
          Protocol = Event.protocol
@@ -162,8 +175,23 @@ define
       end
 
       proc {ForwardToTM Event}
-         {TMs.(Event.tid).(Event.tmid) Event}
+         TMObj
+         in
+         TMObj = {Dictionary.condGet TMs (Event.tid) objs}
+         if {HasFeature TMObj (Event.tmid)} then
+         	{TMs.(Event.tid).(Event.tmid) Event}
+         end
       end 
+
+      proc {AskRTMResponse Event}
+         TMObj
+         in
+         TMObj = {Dictionary.condGet TMs (Event.tid) objs}
+         {Record.forAll TMObj 
+			proc {$ Obj} 
+			    {Obj Event} 
+                        end}
+      end
 
       %% --- For the TPs ----------------------------------------------------
       proc {Brew Event}
@@ -179,7 +207,24 @@ define
       end
 
       proc {Final Event}
-         {TPs.(Event.tid).(Event.tpid) Event.decision}
+         TPObj
+         in
+         TPObj = {Dictionary.condGet TPs (Event.tid) objs}
+         if {HasFeature TPObj (Event.tpid)} then
+         	{TPs.(Event.tid).(Event.tpid) Event.decision}
+                {RemoveTransObj TPs Event.tid Event.tpid}
+         end
+      end
+
+      proc {LeaderChanged Event}
+         TPObj
+         in
+         TPObj = {Dictionary.condGet TPs (Event.tid) objs}
+         if {HasFeature TPObj (Event.tpid)} then
+            {System.showInfo "Leader Changed. Going to abort and kill tp"}
+            {TPObj.(Event.tpid) leaderChanged}
+            {RemoveTransObj TPs Event.tid Event.tpid}
+         end
       end
 
       %% --- Data Management ------------------------------------------------
@@ -294,7 +339,7 @@ define
       %   Timeout := ATime
       %end
 
-      proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trappist)}
+      proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trapp)}
 	{ApplyEventAllTransObj TMs isATMCrashed(Pbeer)}
       end
 
@@ -315,12 +360,18 @@ define
                      initRTM:       InitRTM
                      registerRTM:   ForwardToTM
                      rtms:          ForwardToTM
+                     startLeader:   ForwardToTM
+                     stopLeader:    ForwardToTM
+                     okLeader:      ForwardToTM
                      setFinal:      ForwardToTM
                      vote:          ForwardToTM
                      voteAck:       ForwardToTM
+                     deleteTM:	    DeleteTM
+                     askRTMResponse: AskRTMResponse
                      %% For the TPs
                      brew:          Brew
                      final:         Final
+                     leaderChanged: LeaderChanged
                      %% Data management
                      insertData:    InsertData
                      insertDataAttempt: InsertDataAttempt
