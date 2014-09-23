@@ -146,16 +146,14 @@ define
 
       proc {CheckDecision}
          if {Length @VotedItems} == {Length {Dictionary.keys Votes}} then
-            %% Collected everything
-            if {EnoughRTMacks {Dictionary.keys VotesAcks}} then
+            %% Received All Votes, waiting for RTM acks
+            %if {EnoughRTMacks {Dictionary.keys VotesAcks}} then
                FinalDecision = if {GotAllBrewed} then commit else abort end
                Done := true
                {SpreadDecision FinalDecision}
-            %else	%% Test Code, timeout for vote acks from RTM
-            %   FinalDecision = abort
-            %   Done := true
-            %   {SpreadDecision FinalDecision} 
-            end
+            %else
+            %   {TheTimer startTrigger(@VotingPeriod timeoutRTMDecision)}
+            %end 
          end
       end
 
@@ -190,6 +188,7 @@ define
       end
 
       proc {StartValidation}
+         {System.showInfo "Reached Validation!!"}
          %% Notify all rTMs
          for RTM in @RTMs do
             {@MsgLayer dsend(to:RTM.ref
@@ -226,6 +225,7 @@ define
             		VotingPolls.(I.key) := open
             		{TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
          	end
+               {System.showInfo "Completed Validation"}
 	end
       end
 
@@ -324,9 +324,9 @@ define
 
       proc {VoteAck voteAck(key:Key vote:_ tid:_ tmid:_ rtm:TM tag:trapp)}
          VotesAcks.Key := TM | VotesAcks.Key
-         if {Not @Done} then
-            {CheckDecision}
-         end
+         %if {Not @Done} then
+         %   {CheckDecision}
+         %end
       end
 
       proc {InitRTM initRTM(leader: TheLeader
@@ -352,19 +352,35 @@ define
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
+         {System.showInfo "Initiated a RTM and replied:"#@NodeRef.id}
       end
 
       proc {RegisterRTM registerRTM(rtm:NewRTM tmid:_ tid:_ tag:trapp)}
-         if {HasFeature NewRTM rank} then
-		RTMs := NewRTM|@RTMs
-         else	
-             RTMs := {Record.adjoinAt NewRTM rank @RTMCount}|@RTMs
-             RTMCount := @RTMCount + 1
+         IsNewRTM = {NewCell true}
+         in
+         for RTM in @RTMs do
+           if RTM.ref.id==NewRTM.ref.id then
+              IsNewRTM:=false
+              if RTM.id \= NewRTM.id then
+                 {@MsgLayer dsend(to:NewRTM.ref destroyRTM(tid:     Tid
+                                                	   tmid:    NewRTM.id
+                                                	   tag:     trapp
+                                                           ))}
+              end
+           end
          end
-         if {List.length @RTMs} == @RepFactor-1 then 
-            %% We are done with initialization. We start with validation
-            {StartValidation}
-         end
+         if @IsNewRTM then
+         	if {HasFeature NewRTM rank} then
+			RTMs := NewRTM|@RTMs
+         	else	
+             		RTMs := {Record.adjoinAt NewRTM rank @RTMCount}|@RTMs
+             		RTMCount := @RTMCount + 1
+         	end
+         	if {List.length @RTMs} == @RepFactor-1 then 
+            	%% We are done with initialization. We start with validation
+            		{StartValidation}
+         	end
+	end
       end
          
       proc {SetRTMs rtms(TheRTMs tid:_ tmid:_ tmrank:Rank tag:trapp)}
@@ -573,6 +589,18 @@ define
          end
       end
 
+      proc {TimeoutRTMDecision timeoutRTMDecision}
+	if {EnoughRTMacks {Dictionary.keys VotesAcks}} then
+               FinalDecision = if {GotAllBrewed} then commit else abort end
+               Done := true
+               {SpreadDecision FinalDecision}
+        else	%% Test Code, timeout for vote acks from RTM
+               FinalDecision = abort
+               Done := true
+               {SpreadDecision FinalDecision} 
+        end
+      end
+
       proc {TimeoutRTMs timeoutRTMs}
          if {List.length @RTMs} < @RepFactor-1 then 	% Didn't receive response from all RTMs
             {System.showInfo "Timeout for RTM response"}
@@ -595,6 +623,32 @@ define
                 end
             end
             {StartRound (@CurrentRound mod @RepFactor)+1} 
+         end
+      end
+
+      proc {TimeoutRTMResponse timeoutRTMResponse}
+         if @RTMs==nil then
+            FinalDecision = abort
+            Done := true
+            {SpreadDecision FinalDecision}
+         elseif {List.length @RTMs} < @RepFactor-2 andthen @TMRank==0 then
+             Lowest = {NewCell noref}  
+             in
+             for RTM in @RTMs do
+              	if @Lowest==noref orelse RTM.ref.id < @Lowest.ref.id then
+                   Lowest:=RTM
+                end
+             end
+             RTMCount:=2
+             Leader := {Record.adjoinAt Lowest rank @RTMCount}
+             RTMCount := @RTMCount + 1
+             if Leader.ref.id == @NodeRef.id then
+                Role:=leader
+                TMRank:=@Leader.rank
+                FinalDecision = abort
+                Done := true
+                {SpreadDecision FinalDecision}
+            end
          end
       end
 
@@ -684,12 +738,14 @@ define
                 if {List.length @RTMs} == 0 andthen @TMRank == 0 then
                     {System.showInfo "Don't have RTM list and rank, going to ask from other RTMs"}
                	    {@Replica quickBulk(to:@NodeRef.id 
-                                askRTMResponse(leader:  @Leader
+                                askRTMResponse(rtm: tm(ref:@NodeRef id:Id)
                                                tid:     Tid
                                                tag:     trapp
-                                               ))} 
-                end 
-                {StartRound (@CurrentRound mod @RepFactor)+1}
+                                               ))}
+                    {TheTimer startTrigger(2*@VotingPeriod timeoutRTMResponse)} 
+                else 
+                    {StartRound (@CurrentRound mod @RepFactor)+1}
+                end
              else
 	        for RTM in @RTMs do
                    if RTM.ref.id == Pbeer.id then
@@ -700,8 +756,65 @@ define
          end
       end
 
-      proc {AskRTMResponse askRTMResponse(leader:ALeader hkey:_ tid:_ tag:trapp)}
+      proc {AskRTMResponse askRTMResponse(rtm:ARTM hkey:_ tid:_ tag:trapp)}
 	 {System.showInfo "A RTM asking for responses"}
+         {@MsgLayer dsend(to:ARTM.ref aRTMResponse(rtm: tm(ref:@NodeRef id:Id rank:@TMRank)
+                                                   rtms: @RTMs
+                                                   leader:@Leader
+                                                   tmid:ARTM.id
+                                                   tid: Tid
+                                                   tag: trapp))}
+      end
+
+      proc {ARTMResponse aRTMResponse(rtm:ATM rtms:RTMSet leader:ALeader tmid:_ tid:_ tag:trapp)}
+	if ALeader\=noref andthen @Leader\=noref andthen ALeader.id == @Leader.id 
+           andthen RTMSet==nil andthen ATM.rank==0 then
+	   RTMs := ATM|@RTMs
+           if {List.length @RTMs} == @RepFactor-2 then 
+              Lowest = {NewCell noref} 
+              NewRTMs = {NewCell nil}
+              in
+              for RTM in @RTMs do
+              	if @Lowest==noref orelse RTM.ref.id < @Lowest.ref.id then
+                   Lowest:=RTM
+                end
+              end
+              RTMCount:=2
+              Leader := {Record.adjoinAt Lowest rank @RTMCount}
+              RTMCount := @RTMCount + 1
+              if Leader.ref.id == @NodeRef.id then
+                  Role:=leader
+                  TMRank:=@Leader.rank
+                  for RTM in @RTMs do 
+                     NewRTMs := {Record.adjoinAt RTM rank @RTMCount}|@NewRTMs
+                     RTMCount := @RTMCount + 1  
+                  end 
+                  RTMs:=NewRTMs
+                  {StartValidation} 
+              end
+           end 
+        elseif @RTMs==nil andthen @TMRank==0 then
+           Leader:=ALeader
+           RTMs := RTMSet
+           for RTM in @RTMs do
+              if RTM.id == Id then
+                 TMRank:=RTM.rank
+              end
+           end
+           if @Leader==noref then
+               {StartRound (@CurrentRound mod @RepFactor)+1}
+           else
+               for RTM in @Suspected do
+                  if RTM.ref.id == @Leader.ref.id then
+                       {StartRound (@Leader.rank mod @RepFactor)+1}
+                  end
+               end
+           end
+       end
+      end
+
+      proc {DestroyRTM Event}
+         {Suicide}
       end
 
       Events = events(
@@ -732,8 +845,12 @@ define
                      timeoutPoll:   TimeoutPoll
                      timeoutLeader: TimeoutLeader
                      timeoutRTMs:   TimeoutRTMs
+                     timeoutRTMResponse: TimeoutRTMResponse
+                     timeoutRTMDecision: TimeoutRTMDecision
                      isATMCrashed:  IsATMCrashed
                      askRTMResponse: AskRTMResponse
+                     aRTMResponse:   ARTMResponse
+                     destroyRTM:     DestroyRTM
                      )
    in
       local
