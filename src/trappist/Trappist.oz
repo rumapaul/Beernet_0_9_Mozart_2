@@ -46,7 +46,7 @@ define
 
    fun {New CallArgs}
       Self
-      %Listener
+      Listener
       MsgLayer
       NodeRef
       Replica
@@ -95,7 +95,7 @@ define
 	AllEntries = {Dictionary.entries TransDict}
         in 
 	{List.forAll AllEntries
-            proc {$ K#I}
+            proc {$ _#I}
 	       {Record.forAll I 
 			proc {$ Obj} 
 			    {Obj Event} 
@@ -156,6 +156,11 @@ define
          {RemoveTransObj TMs Event.tid Event.tmid}
       end
 
+      proc {DestroyRTM Event}
+         {ForwardToTM Event}
+         {RemoveTransObj TMs Event.tid Event.tmid} 
+      end
+
       proc {InitRTM Event}
          Client = Event.client
          Protocol = Event.protocol
@@ -168,8 +173,9 @@ define
                                               maxKey:@MaxKey)}
             {RTM setMsgLayer(@MsgLayer)}
             {RTM setReplica(@Replica)}
+            {RTM setListener(Self)}
             {AddTransObj TMs Tid {RTM getId($)} RTM}
-	    {@MsgLayer dmsg(monitor(Event.leader.ref))}
+	    {@Listener monitor(Event.leader.ref)}
             {RTM Event}
          end
       end
@@ -182,6 +188,22 @@ define
          	{TMs.(Event.tid).(Event.tmid) Event}
          end
       end 
+
+      proc {MonitorRTMs Event}
+        RTMSet = Event.1
+        in
+	for TM in RTMSet do
+            if TM.ref.id \= @NodeRef.id then
+            	{@Listener monitor(TM.ref)}
+            end
+        end
+        {ForwardToTM Event}
+      end
+
+      proc {RegisterRTM Event}
+        {@Listener monitor(Event.rtm.ref)}
+  	{ForwardToTM Event}
+      end
 
       proc {AskRTMResponse Event}
          TMObj
@@ -358,8 +380,8 @@ define
                      %% For the TMs
                      ack:           ForwardToTM
                      initRTM:       InitRTM
-                     registerRTM:   ForwardToTM
-                     rtms:          ForwardToTM
+                     registerRTM:   RegisterRTM
+                     rtms:          MonitorRTMs
                      startLeader:   ForwardToTM
                      stopLeader:    ForwardToTM
                      okLeader:      ForwardToTM
@@ -367,7 +389,9 @@ define
                      vote:          ForwardToTM
                      voteAck:       ForwardToTM
                      deleteTM:	    DeleteTM
+                     destroyRTM:    DestroyRTM
                      askRTMResponse: AskRTMResponse
+                     aRTMResponse:  ForwardToTM
                      %% For the TPs
                      brew:          Brew
                      final:         Final
@@ -392,7 +416,7 @@ define
       in
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
-         %Listener = FullComponent.listener
+         Listener = FullComponent.listener
       end
       NodeRef  = {NewCell noref}
       MsgLayer = {NewCell Component.dummy}
