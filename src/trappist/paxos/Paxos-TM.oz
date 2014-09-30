@@ -32,7 +32,7 @@ import
    Constants      at '../../commons/Constants.ozf'
    Timer          at '../../timer/Timer.ozf'
    Utils          at '../../utils/Misc.ozf'
-   System
+   %System
 export
    New
 define
@@ -188,7 +188,7 @@ define
       end
 
       proc {StartValidation}
-         {System.showInfo "Reached Validation!!"}
+         %{System.showInfo "Reached Validation!!"}
          %% Notify all rTMs
          for RTM in @RTMs do
             {@MsgLayer dsend(to:RTM.ref
@@ -225,7 +225,7 @@ define
             		VotingPolls.(I.key) := open
             		{TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
          	end
-               {System.showInfo "Completed Validation"}
+               %{System.showInfo "Completed Validation"}
 	end
       end
 
@@ -352,7 +352,7 @@ define
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
-         {System.showInfo "Initiated a RTM and replied:"#@NodeRef.id}
+         %{System.showInfo "Initiated a RTM and replied:"#@NodeRef.id}
       end
 
       proc {RegisterRTM registerRTM(rtm:NewRTM tmid:_ tid:_ tag:trapp)}
@@ -495,7 +495,7 @@ define
          %% if there are only read operations
          Write = {NewCell false}
       in
-         {System.showInfo "Reached Commit!!"}
+         %{System.showInfo "Reached Commit!!"}
          for I in {Dictionary.entries LocalStore} do
             if I.2.op == write then
                Write := true
@@ -513,7 +513,7 @@ define
             {TheTimer startTrigger(@VotingPeriod timeoutRTMs)}
             %{Debug '#'('Going to start the validation... quick bulk to '
             %           @NodeRef.id)}
-            {System.showInfo "Initiated Init RTMs and triggered timer"}
+            %{System.showInfo "Initiated Init RTMs and triggered timer"}
          else
             %{Debug "Nothing to write.... just releasing logs"}
             {SpreadDecision commit}
@@ -603,7 +603,7 @@ define
 
       proc {TimeoutRTMs timeoutRTMs}
          if {List.length @RTMs} < @RepFactor-1 then 	% Didn't receive response from all RTMs
-            {System.showInfo "Timeout for RTM response"}
+            %{System.showInfo "Timeout for RTM response"}
             if @Leader\=noref andthen @Role==leader then
 		FinalDecision = abort
             	Done := true
@@ -690,7 +690,7 @@ define
 
      proc {StartLeader startLeader(rtm:ATM leaderRank:K tmid:_ tid:_ tag:trapp)}
          if K>@CurrentRound then
-            {StartRound (K mod @RepFactor)+1}
+            {StartRound (K mod @RepFactor)}
          else
             if K==@CurrentRound then
                 {@MsgLayer dsend(to:ATM.ref okLeader(leader:@Leader
@@ -717,11 +717,11 @@ define
                                                      tid: Tid
                                                      tag: trapp))}
                  {DiscardAllVotes}
-                 {System.showInfo "Elected New Leader"}
+                 %{System.showInfo "Elected New Leader"}
              end
          else
              if NewLeader.rank > @CurrentRound then
-                {StartRound (NewLeader.rank mod @RepFactor)+1}
+                {StartRound (NewLeader.rank mod @RepFactor)}
              end
         end
      end
@@ -729,14 +729,14 @@ define
       proc {IsATMCrashed isATMCrashed(Pbeer)}
          if {Not @Done} then
              if @Leader \= noref andthen @Leader.ref.id == Pbeer.id then
-                {System.showInfo "Leader Crashed!!"}
+                %{System.showInfo "Leader Crashed!!"}
                 Suspected := @Leader|@Suspected
                 {@MsgLayer dsend(to:@Leader.ref stopLeader(leader:@Leader
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
                 if {List.length @RTMs} == 0 andthen @TMRank == 0 then
-                    {System.showInfo "Don't have RTM list and rank, going to ask from other RTMs"}
+                    %{System.showInfo "Don't have RTM list and rank, going to ask from other RTMs"}
                	    {@Replica quickBulk(to:@NodeRef.id 
                                 askRTMResponse(rtm: tm(ref:@NodeRef id:Id)
                                                tid:     Tid
@@ -757,7 +757,7 @@ define
       end
 
       proc {AskRTMResponse askRTMResponse(rtm:ARTM hkey:_ tid:_ tag:trapp)}
-	 {System.showInfo "A RTM asking for responses"}
+	 %{System.showInfo "A RTM asking for responses"}
          {@MsgLayer dsend(to:ARTM.ref aRTMResponse(rtm: tm(ref:@NodeRef id:Id rank:@TMRank)
                                                    rtms: @RTMs
                                                    leader:@Leader
@@ -875,7 +875,7 @@ define
       TPs         = {Dictionary.new}
       VotesAcks   = {Dictionary.new}
       VotingPolls = {Dictionary.new}
-      VotingPeriod= {NewCell 5000}
+      VotingPeriod= {NewCell 20000}
       RTMs        = {NewCell nil}
       VotedItems  = {NewCell nil}
       %AckedItems  = {NewCell nil}
@@ -886,7 +886,7 @@ define
       LocalStore  = {Dictionary.new}
       Suspected   = {NewCell nil}
       CurrentRound = {NewCell 1}
-      LEPeriod     = {NewCell 5000}
+      LEPeriod     = {NewCell 20000}
       if @Role == leader then
          Tid         = {Name.new}
          Leader      = {NewCell noref}
