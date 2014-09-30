@@ -26,7 +26,7 @@
 
 functor
 import
-   System
+   %System
    Component      at '../corecomp/Component.ozf'
    Constants      at '../commons/Constants.ozf'
    Utils          at '../utils/Misc.ozf'
@@ -243,7 +243,7 @@ define
          in
          TPObj = {Dictionary.condGet TPs (Event.tid) objs}
          if {HasFeature TPObj (Event.tpid)} then
-            {System.showInfo "Leader Changed. Going to abort and kill tp"}
+            %{System.showInfo "Leader Changed. Going to abort and kill tp"}
             {TPObj.(Event.tpid) leaderChanged}
             {RemoveTransObj TPs Event.tid Event.tpid}
          end
