@@ -271,6 +271,7 @@ define
             end
          end
       end
+
       %% --- End of Masking value-sets operations ---------------------------
 
       ToNode      = {Utils.delegatesTo Node}
@@ -362,6 +363,7 @@ define
       {@Replica setMsgLayer(@MsgLayer)}
       {@Trappist setMsgLayer(@MsgLayer)}
       {@Trappist setReplica(@Replica)}
+      {@Trappist setListener(Self)}
       local
          StorageBoard StorageSubscriber
       in

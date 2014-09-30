@@ -46,7 +46,7 @@ define
 
    fun {New CallArgs}
       Self
-      %Listener
+      Listener
       MsgLayer
       NodeRef
       Replica
@@ -83,11 +83,19 @@ define
          TransDict.Tid := {Record.adjoinAt TheObjs ObjId Obj}
       end
 
+      proc {RemoveTransObj TransDict Tid ObjId}
+         TheObjs
+      in
+         TheObjs = {Dictionary.condGet TransDict Tid objs}
+         %{TheObjs.ObjId signalDestroy}
+         TransDict.Tid := {Record.subtract TheObjs ObjId}
+      end
+
       proc {ApplyEventAllTransObj TransDict Event}	%% RRP
 	AllEntries = {Dictionary.entries TransDict}
         in 
 	{List.forAll AllEntries
-            proc {$ K#I}
+            proc {$ _#I}
 	       {Record.forAll I 
 			proc {$ Obj} 
 			    {Obj Event} 
@@ -121,7 +129,7 @@ define
                                           maxKey:@MaxKey)}
          {TM setMsgLayer(@MsgLayer)}
          {TM setReplica(@Replica)}
-         %{Debug 'Trap: TM object created and ready to call the transaciton'}
+         {TM setListener(Self)}
          {AddTransObj TMs {TM getTid($)} {TM getId($)} TM}
          {Trans TM}
       end
@@ -143,6 +151,16 @@ define
       end
 
       %% --- For the TMs ----------------------------------------------------
+      proc {DeleteTM Event}
+         %{System.showInfo "Reached Delete Procedure"}
+         {RemoveTransObj TMs Event.tid Event.tmid}
+      end
+
+      proc {DestroyRTM Event}
+         {ForwardToTM Event}
+         {RemoveTransObj TMs Event.tid Event.tmid} 
+      end
+
       proc {InitRTM Event}
          Client = Event.client
          Protocol = Event.protocol
@@ -155,15 +173,47 @@ define
                                               maxKey:@MaxKey)}
             {RTM setMsgLayer(@MsgLayer)}
             {RTM setReplica(@Replica)}
+            {RTM setListener(Self)}
             {AddTransObj TMs Tid {RTM getId($)} RTM}
-	    {@MsgLayer dmsg(monitor(Event.leader.ref))}
+	    {@Listener monitor(Event.leader.ref)}
             {RTM Event}
          end
       end
 
       proc {ForwardToTM Event}
-         {TMs.(Event.tid).(Event.tmid) Event}
+         TMObj
+         in
+         TMObj = {Dictionary.condGet TMs (Event.tid) objs}
+         if {HasFeature TMObj (Event.tmid)} then
+         	{TMs.(Event.tid).(Event.tmid) Event}
+         end
       end 
+
+      proc {MonitorRTMs Event}
+        RTMSet = Event.1
+        in
+	for TM in RTMSet do
+            if TM.ref.id \= @NodeRef.id then
+            	{@Listener monitor(TM.ref)}
+            end
+        end
+        {ForwardToTM Event}
+      end
+
+      proc {RegisterRTM Event}
+        {@Listener monitor(Event.rtm.ref)}
+  	{ForwardToTM Event}
+      end
+
+      proc {AskRTMResponse Event}
+         TMObj
+         in
+         TMObj = {Dictionary.condGet TMs (Event.tid) objs}
+         {Record.forAll TMObj 
+			proc {$ Obj} 
+			    {Obj Event} 
+                        end}
+      end
 
       %% --- For the TPs ----------------------------------------------------
       proc {Brew Event}
@@ -179,7 +229,24 @@ define
       end
 
       proc {Final Event}
-         {TPs.(Event.tid).(Event.tpid) Event.decision}
+         TPObj
+         in
+         TPObj = {Dictionary.condGet TPs (Event.tid) objs}
+         if {HasFeature TPObj (Event.tpid)} then
+         	{TPs.(Event.tid).(Event.tpid) Event.decision}
+                {RemoveTransObj TPs Event.tid Event.tpid}
+         end
+      end
+
+      proc {LeaderChanged Event}
+         TPObj
+         in
+         TPObj = {Dictionary.condGet TPs (Event.tid) objs}
+         if {HasFeature TPObj (Event.tpid)} then
+            %{System.showInfo "Leader Changed. Going to abort and kill tp"}
+            {TPObj.(Event.tpid) leaderChanged}
+            {RemoveTransObj TPs Event.tid Event.tpid}
+         end
       end
 
       %% --- Data Management ------------------------------------------------
@@ -313,14 +380,22 @@ define
                      %% For the TMs
                      ack:           ForwardToTM
                      initRTM:       InitRTM
-                     registerRTM:   ForwardToTM
-                     rtms:          ForwardToTM
+                     registerRTM:   RegisterRTM
+                     rtms:          MonitorRTMs
+                     startLeader:   ForwardToTM
+                     stopLeader:    ForwardToTM
+                     okLeader:      ForwardToTM
                      setFinal:      ForwardToTM
                      vote:          ForwardToTM
                      voteAck:       ForwardToTM
+                     deleteTM:	    DeleteTM
+                     destroyRTM:    DestroyRTM
+                     askRTMResponse: AskRTMResponse
+                     aRTMResponse:  ForwardToTM
                      %% For the TPs
                      brew:          Brew
                      final:         Final
+                     leaderChanged: LeaderChanged
                      %% Data management
                      insertData:    InsertData
                      insertDataAttempt: InsertDataAttempt
@@ -341,7 +416,7 @@ define
       in
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
-         %Listener = FullComponent.listener
+         Listener = FullComponent.listener
       end
       NodeRef  = {NewCell noref}
       MsgLayer = {NewCell Component.dummy}

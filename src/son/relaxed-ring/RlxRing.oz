@@ -413,11 +413,14 @@ define
          Peer = @Succ
       end
 
-      proc {Hint Event}
-         hint(succ:_/*NewSucc*/) = Event
-      in
-         %%TODO. First I need to guarantee that this is a safe message
-         skip
+      proc {Hint hint(succ:NewSucc)}
+         if {BelongsTo NewSucc.id @SelfRef.id @Succ.id-1} then
+            {Zend @Succ predNoMore(@SelfRef)}
+            Succ := NewSucc
+            {Monitor NewSucc}
+            {@FingerTable monitor(NewSucc)}
+            {Zend @Succ fix(src:@SelfRef)}
+         end
       end
 
       proc {IdInUse idInUse(Id)}
@@ -454,6 +457,14 @@ define
                                 succList:@SuccList)}
                Pred := Src
                {Monitor Src} 
+               if @PredList \= nil then		%% Code to prune branch
+                  CloserPeerOnBranch = {RingList.getLast @PredList nil}
+                  in
+                  if CloserPeerOnBranch\=nil then
+                    {Zend CloserPeerOnBranch hint(succ:Src)}
+                  end
+               end     
+               
                PredList := {AddToList @Pred @PredList}
                %% Tell data management to migrate data in range ]OldPred, Pred]
                {@Listener newPred(old:OldPred new:@Pred tag:data)}
