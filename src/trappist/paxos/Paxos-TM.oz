@@ -230,13 +230,6 @@ define
       end
 
       proc {SpreadDecision Decision}
-         %% Send to the Client
-         try
-            {Port.send Client Decision}
-         catch _ then
-            %% TODO: improve exception handling
-            skip
-         end
          %% Send to all TPs
          for Key in {Dictionary.keys Votes} do
             for TP in TPs.Key do
@@ -253,6 +246,13 @@ define
                                                 tid:     Tid
                                                 tmid:    TM.id
                                                 tag:     trapp))}
+         end
+         %% Send to the Client
+         try
+            {Port.send Client Decision}
+         catch _ then
+            %% TODO: improve exception handling
+            skip
          end
          {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
          {Suicide}
