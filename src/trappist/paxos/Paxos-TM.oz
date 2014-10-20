@@ -68,7 +68,6 @@ define
       VotesAcks      % Collect decided items from rTMs
       TPs            % Direct reference to transaction participants
       VotedItems     % Collect items once enough votes are received 
-      %AckedItems     % Collect items once enough acks are received 
       Done           % Flag to know when we are done
       MaxKey         % To use the hash function
 
@@ -150,10 +149,7 @@ define
             %if {EnoughRTMacks {Dictionary.keys VotesAcks}} then
                FinalDecision = if {GotAllBrewed} then commit else abort end
                Done := true
-               {SpreadDecision FinalDecision}
-            %else
-            %   {TheTimer startTrigger(@VotingPeriod timeoutRTMDecision)}
-            %end 
+               {SpreadDecision FinalDecision false} 
          end
       end
 
@@ -162,6 +158,19 @@ define
          of K|MoreKeys then
             if {Length VotesAcks.K} >= @RepFactor div 2 then
                {EnoughRTMacks MoreKeys}
+            else
+               false
+            end
+         [] nil then
+            true
+         end
+      end
+
+      fun {EnoughTPacks Keys}
+         case Keys
+         of K|MoreKeys then
+            if {Length Acks.K} > @RepFactor div 2 then
+               {EnoughTPacks MoreKeys}
             else
                false
             end
@@ -188,7 +197,6 @@ define
       end
 
       proc {StartValidation}
-         %{System.showInfo "Reached Validation!!"}
          %% Notify all rTMs
          for RTM in @RTMs do
             {@MsgLayer dsend(to:RTM.ref
@@ -225,18 +233,10 @@ define
             		VotingPolls.(I.key) := open
             		{TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
          	end
-               %{System.showInfo "Completed Validation"}
 	end
       end
 
-      proc {SpreadDecision Decision}
-         %% Send to the Client
-         try
-            {Port.send Client Decision}
-         catch _ then
-            %% TODO: improve exception handling
-            skip
-         end
+      proc {SpreadDecision Decision ImmediateNotification}
          %% Send to all TPs
          for Key in {Dictionary.keys Votes} do
             for TP in TPs.Key do
@@ -250,12 +250,24 @@ define
          %% Send to all rTMs
          for TM in @RTMs do
             {@MsgLayer dsend(to:TM.ref setFinal(decision:Decision
+                                                destroyflag: ImmediateNotification
                                                 tid:     Tid
                                                 tmid:    TM.id
                                                 tag:     trapp))}
          end
-         {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
-         {Suicide}
+
+         if ImmediateNotification then
+            try
+            	{Port.send Client Decision}
+            catch _ then
+                %% TODO: improve exception handling
+                skip
+            end
+            {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
+            {Suicide}
+         else
+            {TheTimer startTrigger((2*@VotingPeriod) timeoutAcks)}
+         end
       end
 
      proc {CheckConsensus Key}
@@ -277,16 +289,26 @@ define
                                         	tag:    trapp))}
 	        end
             end
-         /*elseif Consensus == late andthen @Leader.id == Id then
-            thread
-               {Wait FinalDecision}
-               {@MsgLayer dsend(to:FullVote.tp.ref
-                                final(decision: FinalDecision
-                                      tid:Tid
-                                      tpid:FullVote.tp.id
-                                      tag:trapp))}
-            end*/
          end
+     end
+
+     proc {CheckTermination IsTimeout}
+        if {EnoughTPacks {Dictionary.keys Acks}} orelse IsTimeout then
+           try
+             {Port.send Client FinalDecision}
+           catch _ then
+             %% TODO: improve exception handling
+             skip
+           end
+           %% Notify all rTMs
+           for TM in @RTMs do
+              {@MsgLayer dsend(to:TM.ref notifyTermination(tid:     Tid
+                                                	   tmid:    TM.id
+                                                           tag:     trapp))}
+           end
+           {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
+           {Suicide}
+       end
      end
 
      proc {DiscardAllVotes}
@@ -303,6 +325,9 @@ define
 
       proc {Ack ack(key:Key tp:TP tid:_ tmid:_ tag:trapp)}
          Acks.Key := TP | Acks.Key
+         if @Leader\=noref andthen @Leader.id==Id then 
+            {CheckTermination false}
+         end
       end
 
       proc {Vote FullVote}
@@ -324,9 +349,6 @@ define
 
       proc {VoteAck voteAck(key:Key vote:_ tid:_ tmid:_ rtm:TM tag:trapp)}
          VotesAcks.Key := TM | VotesAcks.Key
-         %if {Not @Done} then
-         %   {CheckDecision}
-         %end
       end
 
       proc {InitRTM initRTM(leader: TheLeader
@@ -352,7 +374,6 @@ define
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
-         %{System.showInfo "Initiated a RTM and replied:"#@NodeRef.id}
       end
 
       proc {RegisterRTM registerRTM(rtm:NewRTM tmid:_ tid:_ tag:trapp)}
@@ -376,9 +397,15 @@ define
              		RTMs := {Record.adjoinAt NewRTM rank @RTMCount}|@RTMs
              		RTMCount := @RTMCount + 1
          	end
-         	if {List.length @RTMs} == @RepFactor-1 then 
+         	if {List.length @RTMs} == @RepFactor-1 andthen 
+                          @Leader\=noref andthen @Leader.id==Id then 
             	%% We are done with initialization. We start with validation
-            		{StartValidation}
+                        if {Not @Done} then
+            		   {StartValidation}
+                        else
+                           %{CheckTermination true}
+                           {TheTimer startTrigger((2*@VotingPeriod) timeoutAcks)}
+                        end
          	end
 	end
       end
@@ -391,9 +418,18 @@ define
          end
       end
 
-      proc {SetFinal setFinal(decision:Decision tid:_ tmid:_ tag:trapp)}
-         FinalDecision = Decision
-         Done:=true
+      proc {SetFinal setFinal(decision:Decision destroyflag:ToSuicide tid:_ tmid:_ tag:trapp)}
+         if {Not @Done} then
+            FinalDecision = Decision
+            Done:=true
+            if ToSuicide then
+               {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
+               {Suicide}
+            end
+         end
+      end
+
+      proc {NotifyTermination notifyTermination(tid:_ tmid:_ tag:trapp)}
          {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
          {Suicide}
       end
@@ -511,13 +547,10 @@ define
                                         tag:     trapp
                                         ))} 
             {TheTimer startTrigger(@VotingPeriod timeoutRTMs)}
-            %{Debug '#'('Going to start the validation... quick bulk to '
-            %           @NodeRef.id)}
-            %{System.showInfo "Initiated Init RTMs and triggered timer"}
          else
-            %{Debug "Nothing to write.... just releasing logs"}
-            {SpreadDecision commit}
-            %{Debug "after spread decision"}
+            FinalDecision = commit
+            Done := true
+            {SpreadDecision FinalDecision true}
          end
       end
 
@@ -582,33 +615,30 @@ define
       end
 
       proc {TimeoutPoll timeoutPoll(Key)}
-         if VotingPolls.Key == open then
-            %{System.showInfo "Timeout for:"#Key}
+         if {Dictionary.member VotingPolls Key} andthen VotingPolls.Key == open then
             VotingPolls.Key := close
             {CheckConsensus Key}
          end
       end
 
-      proc {TimeoutRTMDecision timeoutRTMDecision}
-	if {EnoughRTMacks {Dictionary.keys VotesAcks}} then
-               FinalDecision = if {GotAllBrewed} then commit else abort end
-               Done := true
-               {SpreadDecision FinalDecision}
-        else	%% Test Code, timeout for vote acks from RTM
-               FinalDecision = abort
-               Done := true
-               {SpreadDecision FinalDecision} 
-        end
-      end
-
       proc {TimeoutRTMs timeoutRTMs}
-         if {List.length @RTMs} < @RepFactor-1 then 	% Didn't receive response from all RTMs
-            %{System.showInfo "Timeout for RTM response"}
-            if @Leader\=noref andthen @Role==leader then
+         if @Leader\=noref andthen @Leader.id==Id andthen {List.length @RTMs} < @RepFactor-1 then
+            % Didn't receive response from all RTMs
+            if {Not @Done} then
 		FinalDecision = abort
             	Done := true
-                {SpreadDecision FinalDecision} 
+                %{System.showInfo "From TimeoutRTMs"}
+                {SpreadDecision FinalDecision true}
+            else
+                {CheckTermination true}
             end
+         end
+      end
+
+      proc {TimeoutAcks timeoutAcks}
+         if @Leader\=noref andthen @Leader.id==Id then
+                %{System.showInfo "Timeout to receive Acks"}
+         	{CheckTermination true}
          end
       end
 
@@ -627,11 +657,12 @@ define
       end
 
       proc {TimeoutRTMResponse timeoutRTMResponse}
-         if @RTMs==nil then
+         if {Not @Done} andthen {List.length @RTMs}==0 then
             FinalDecision = abort
             Done := true
-            {SpreadDecision FinalDecision}
-         elseif {List.length @RTMs} < @RepFactor-2 andthen @TMRank==0 then
+            %{System.showInfo "From TimeoutRTMResponse1"}
+            %{SpreadDecision FinalDecision true}
+         elseif {Not @Done} andthen {List.length @RTMs} < @RepFactor-2 andthen @TMRank==0 then
              Lowest = {NewCell noref}  
              in
              for RTM in @RTMs do
@@ -642,12 +673,13 @@ define
              RTMCount:=2
              Leader := {Record.adjoinAt Lowest rank @RTMCount}
              RTMCount := @RTMCount + 1
-             if Leader.ref.id == @NodeRef.id then
+             if @Leader.ref.id == @NodeRef.id then
                 Role:=leader
                 TMRank:=@Leader.rank
                 FinalDecision = abort
                 Done := true
-                {SpreadDecision FinalDecision}
+                %{System.showInfo "From TimeoutRTMResponse2"}
+                {SpreadDecision FinalDecision true}
             end
          end
       end
@@ -693,6 +725,8 @@ define
             {StartRound (K mod @RepFactor)}
          else
             if K==@CurrentRound then
+                Role := leader
+                Leader := tm(ref:@NodeRef id:Id rank:@TMRank)
                 {@MsgLayer dsend(to:ATM.ref okLeader(leader:@Leader
                                                      tmid:ATM.id
                                                      tid: Tid
@@ -716,8 +750,9 @@ define
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
-                 {DiscardAllVotes}
-                 %{System.showInfo "Elected New Leader"}
+                 if {Not @Done} then
+                    {DiscardAllVotes}
+                 end
              end
          else
              if NewLeader.rank > @CurrentRound then
@@ -729,20 +764,18 @@ define
       proc {IsATMCrashed isATMCrashed(Pbeer)}
          if {Not @Done} then
              if @Leader \= noref andthen @Leader.ref.id == Pbeer.id then
-                %{System.showInfo "Leader Crashed!!"}
                 Suspected := @Leader|@Suspected
                 {@MsgLayer dsend(to:@Leader.ref stopLeader(leader:@Leader
                                                      tmid:@Leader.id
                                                      tid: Tid
                                                      tag: trapp))}
                 if {List.length @RTMs} == 0 andthen @TMRank == 0 then
-                    %{System.showInfo "Don't have RTM list and rank, going to ask from other RTMs"}
                	    {@Replica quickBulk(to:@NodeRef.id 
                                 askRTMResponse(rtm: tm(ref:@NodeRef id:Id)
                                                tid:     Tid
                                                tag:     trapp
                                                ))}
-                    {TheTimer startTrigger(2*@VotingPeriod timeoutRTMResponse)} 
+                    {TheTimer startTrigger((3*@VotingPeriod) timeoutRTMResponse)} 
                 else 
                     {StartRound (@CurrentRound mod @RepFactor)+1}
                 end
@@ -753,11 +786,26 @@ define
                    end
                 end
              end
+         else
+             if @Leader \= noref andthen @Leader.ref.id == Pbeer.id then
+             	%{System.showInfo "Final Decision, but Leader died"}
+                Suspected := @Leader|@Suspected
+                {@MsgLayer dsend(to:@Leader.ref stopLeader(leader:@Leader
+                                                     tmid:@Leader.id
+                                                     tid: Tid
+                                                     tag: trapp))}
+                {StartRound (@CurrentRound mod @RepFactor)+1}
+            else
+	        for RTM in @RTMs do
+                   if RTM.ref.id == Pbeer.id then
+                       Suspected:=RTM|@Suspected
+                   end
+                end
+             end
          end
       end
 
       proc {AskRTMResponse askRTMResponse(rtm:ARTM hkey:_ tid:_ tag:trapp)}
-	 %{System.showInfo "A RTM asking for responses"}
          {@MsgLayer dsend(to:ARTM.ref aRTMResponse(rtm: tm(ref:@NodeRef id:Id rank:@TMRank)
                                                    rtms: @RTMs
                                                    leader:@Leader
@@ -768,7 +816,7 @@ define
 
       proc {ARTMResponse aRTMResponse(rtm:ATM rtms:RTMSet leader:ALeader tmid:_ tid:_ tag:trapp)}
 	if ALeader\=noref andthen @Leader\=noref andthen ALeader.id == @Leader.id 
-           andthen RTMSet==nil andthen ATM.rank==0 then
+           andthen {List.length RTMSet}==0 andthen ATM.rank==0 then
 	   RTMs := ATM|@RTMs
            if {List.length @RTMs} == @RepFactor-2 then 
               Lowest = {NewCell noref} 
@@ -793,7 +841,7 @@ define
                   {StartValidation} 
               end
            end 
-        elseif @RTMs==nil andthen @TMRank==0 then
+        elseif {List.length @RTMs}==0 andthen @TMRank==0 then
            Leader:=ALeader
            RTMs := RTMSet
            for RTM in @RTMs do
@@ -833,6 +881,7 @@ define
                      okLeader:      OkLeader
                      setFinal:      SetFinal
                      voteAck:       VoteAck
+                     notifyTermination: NotifyTermination
                      %% Interaction with TPs
                      ack:           Ack
                      vote:          Vote
@@ -846,7 +895,7 @@ define
                      timeoutLeader: TimeoutLeader
                      timeoutRTMs:   TimeoutRTMs
                      timeoutRTMResponse: TimeoutRTMResponse
-                     timeoutRTMDecision: TimeoutRTMDecision
+                     timeoutAcks:	 TimeoutAcks
                      isATMCrashed:  IsATMCrashed
                      askRTMResponse: AskRTMResponse
                      aRTMResponse:   ARTMResponse
@@ -875,10 +924,9 @@ define
       TPs         = {Dictionary.new}
       VotesAcks   = {Dictionary.new}
       VotingPolls = {Dictionary.new}
-      VotingPeriod= {NewCell 20000}
+      VotingPeriod= {NewCell 7000}
       RTMs        = {NewCell nil}
       VotedItems  = {NewCell nil}
-      %AckedItems  = {NewCell nil}
       Done        = {NewCell false}
       MaxKey      = {NewCell Args.maxKey}
       Role        = {NewCell Args.role}
@@ -886,7 +934,7 @@ define
       LocalStore  = {Dictionary.new}
       Suspected   = {NewCell nil}
       CurrentRound = {NewCell 1}
-      LEPeriod     = {NewCell 20000}
+      LEPeriod     = {NewCell 10000}
       if @Role == leader then
          Tid         = {Name.new}
          Leader      = {NewCell noref}
