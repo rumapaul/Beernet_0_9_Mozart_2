@@ -362,7 +362,9 @@ define
       %end
 
       proc {HandleNodeCrash nodeCrash(node:Pbeer tag:trapp)}
-	{ApplyEventAllTransObj TMs isATMCrashed(Pbeer)}
+        if Pbeer.id \= @NodeRef.id then
+		{ApplyEventAllTransObj TMs isATMCrashed(Pbeer)}
+        end
       end
 
       Events = events(
@@ -386,6 +388,7 @@ define
                      stopLeader:    ForwardToTM
                      okLeader:      ForwardToTM
                      setFinal:      ForwardToTM
+                     notifyTermination: ForwardToTM
                      vote:          ForwardToTM
                      voteAck:       ForwardToTM
                      deleteTM:	    DeleteTM
