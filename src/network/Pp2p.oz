@@ -37,7 +37,9 @@ functor
 
 import
    Component   at '../corecomp/Component.ozf'
-
+   Timer       at '../timer/Timer.ozf'
+   BootTime    at 'x-oz://boot/Time'
+ 
 export
    New
 
@@ -53,6 +55,10 @@ define
       FullComponent  % This component
       %DelayPeriod      % Link Delay Knob 
       AllLinkDelays   %Delay Periods for All links
+      MessageBuffer  % Buffer for messages to simulate network delays     
+      DelayTimerFlag % Flag to determine to the clycle of delay simulations
+      MinTimeoutPeriod %The granularity for the timer 
+      TheTimer       % Component that triggers timeout
 
       proc {GetPort getPort(P)}
          P = SitePort
@@ -65,9 +71,16 @@ define
                   {Delay @DelayPeriod}
                end*/
                if {Value.hasFeature @AllLinkDelays Dest.id} then
-                   {Delay @AllLinkDelays.(Dest.id)}
+                   MessageBuffer := message(dest:Dest msg:Msg 
+                                           timestamp:{BootTime.getReferenceTime})|@MessageBuffer
+                   if {Not @DelayTimerFlag} then
+                       {TheTimer startTimer(@MinTimeoutPeriod)}
+                       DelayTimerFlag := true
+                   end
+                   %{Delay @AllLinkDelays.(Dest.id)}
+               else
+                   {Port.send Dest.port SitePort#Msg}
                end
-               {Port.send Dest.port SitePort#Msg}
             end
             %{Port.send Dest SitePort#Msg}
          catch _ then
@@ -107,7 +120,7 @@ define
       end*/
 
        proc {InjectDelayVariance injectDelayVariance(Dest PeriodToVary DirectionFlag)}
-          CurrentDelay
+          CurrentDelay NewDelay
           in
           if {Value.hasFeature @AllLinkDelays Dest} then
               CurrentDelay = @AllLinkDelays.Dest
@@ -115,24 +128,50 @@ define
               CurrentDelay = 0
           end 
           if DirectionFlag == 1 then
-             AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest (CurrentDelay+PeriodToVary)}
+             NewDelay = CurrentDelay+PeriodToVary
           else
              NewDelay = CurrentDelay - PeriodToVary
-             in
-             if NewDelay > 0 then
+          end
+
+          if NewDelay > 0 then
                 AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest NewDelay}
-             else
+                if @MinTimeoutPeriod == 0 orelse NewDelay<@MinTimeoutPeriod then
+                   MinTimeoutPeriod := NewDelay
+                end
+          else
                 AllLinkDelays := {Record.subtract @AllLinkDelays Dest}
-             end
           end
       end
 
       proc {SimulateALinkDelay simulateALinkDelay(Dest Period)}
           if Period > 0 then
              AllLinkDelays := {Record.adjoinAt @AllLinkDelays Dest Period}
+             if @MinTimeoutPeriod == 0 orelse Period<@MinTimeoutPeriod then
+                 MinTimeoutPeriod := Period
+             end
           else
              AllLinkDelays := {Record.subtract @AllLinkDelays Dest}
           end
+      end
+
+      proc {ARound timeout}
+          CurrentRefTime = {BootTime.getReferenceTime}
+          TmpMsgBuffer = {NewCell nil}
+          in
+          for AMessage in @MessageBuffer do
+              if {Value.hasFeature @AllLinkDelays AMessage.dest.id} andthen
+		 (CurrentRefTime-(AMessage.timestamp))>=@AllLinkDelays.(AMessage.dest.id) then
+                   {Port.send AMessage.dest.port SitePort#(AMessage.msg)}
+              else
+                   TmpMsgBuffer := AMessage|@TmpMsgBuffer
+              end
+          end
+          MessageBuffer:=@TmpMsgBuffer
+          if @MessageBuffer\=nil then
+             {TheTimer startTimer(@MinTimeoutPeriod)}
+          else
+	     DelayTimerFlag := false
+          end 
       end
 
       Events = events(
@@ -142,12 +181,19 @@ define
                   %injectLowLinkDelay: InjectLowLinkDelay
                   %injectNoLinkDelay:  InjectNoLinkDelay
                   injectDelayVariance: InjectDelayVariance
-                  simulateALinkDelay: SimulateALinkDelay
+                  simulateALinkDelay:  SimulateALinkDelay
+                  timeout:	       ARound   	
                   )
 
    in
       %DelayPeriod = {NewCell INIT_DELAY}
-      AllLinkDelays = {NewCell linkdelays(name:simulateddelays)}
+      AllLinkDelays = {NewCell linkdelays}
+      MessageBuffer = {NewCell nil}
+      DelayTimerFlag = {NewCell false}
+      MinTimeoutPeriod = {NewCell 0}
+
+      TheTimer    = {Timer.new}
+       
       local
          Stream
       in
@@ -158,6 +204,7 @@ define
       end
       FullComponent = {Component.new Events}
       Listener = FullComponent.listener
+      {TheTimer setListener(FullComponent.trigger)}
       FullComponent.trigger
    end
 end
