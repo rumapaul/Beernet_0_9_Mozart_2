@@ -49,7 +49,6 @@ define
 
    INIT_TIMEOUT = 1000   % Initial Timeout value
    MIN_TIMEOUT = 100     % Minimum Timeout value
-   %BUFFER_LIMIT = 30 	% Recent History of Round Trip Time
    MONITORING_LIMIT = 200 % Maximum nodes that will be monitored by a node for a network size of 50
 
    %% Add an element at the end of list.
@@ -139,6 +138,9 @@ define
       Self        % Reference to this component
       SelfPbeer   % Pbeer reference assinged by a external component
 
+      MinTO       % Timeout for unified timer
+      TimerFlag   % Flag to track whether timer is on
+
       Alive       % Pbeers known to be alive
       Notified    % Pbeers already notified as crashed
       Pbeers      % Pbeers to be monitored
@@ -150,22 +152,26 @@ define
       Std_Dev_Coeff_m2
       Avg_Coeff_m1
 
-      %% Sends a ping message to all monitored pbeers and launch the timer
-      proc {NewRound start(Pbeer T)}
-         {ComLayer sendTo(Pbeer ping(@SelfPbeer
-			timestamp:{BootTime.getReferenceTime} tag:fd) log:faildet)}
-         {TheTimer startTrigger(T timeout(Pbeer.id))}
-      end
-
       proc {Monitor monitor(Pbeer)}
          if Pbeer.id \= @SelfPbeer.id andthen
             {Not {PbeerList.isIn Pbeer @Pbeers}} then
-            NewConnection
+            NewConnection = {NewCell noref}
+            LastQuery = {BootTime.getReferenceTime}
             in
             Pbeers := {PbeerList.add Pbeer @Pbeers}
-            NewConnection = {Record.adjoinAt Pbeer rtt_history nil}
-            Connections := {PbeerList.add {Record.adjoinAt NewConnection last_response 0} @Connections}
-            {NewRound start(Pbeer INIT_TIMEOUT)}
+            NewConnection := {Record.adjoinAt Pbeer rtt_history nil}
+            NewConnection := {Record.adjoinAt @NewConnection last_response 0}
+            NewConnection := {Record.adjoinAt @NewConnection last_query LastQuery}
+            NewConnection := {Record.adjoinAt @NewConnection period INIT_TIMEOUT}
+            Connections := {PbeerList.add @NewConnection @Connections}
+            {ComLayer sendTo(Pbeer ping(@SelfPbeer timestamp:LastQuery tag:fd) log:faildet)}
+            if @MinTO>INIT_TIMEOUT then
+               MinTO:=INIT_TIMEOUT
+            end 
+            if {Not @TimerFlag} then
+               TimerFlag := true
+               {TheTimer startTimer(@MinTO)}
+            end
          end
 
          if {List.length @Pbeers} > MONITORING_LIMIT andthen {List.length @Notified} > 0 then
@@ -178,40 +184,56 @@ define
          end
       end
 
-      proc {Timeout timeout(PbeerId)}
-         Pbeer
-         CurrentConnection
+      proc {Timeout timeout}
+         CurRefTime = {BootTime.getReferenceTime}
          in
-         CurrentConnection = {PbeerList.retrievePbeer PbeerId @Connections} 
-         Pbeer = {PbeerList.retrievePbeer PbeerId @Pbeers}
-         
-         if Pbeer \= nil then
-           IsInAlive = {PbeerList.isIn Pbeer @Alive}
-           IsInNotified = {PbeerList.isIn Pbeer @Notified}
-           NewTimeout
-           in 
-           if IsInAlive andthen IsInNotified then
-                  Notified := {PbeerList.remove Pbeer @Notified}
-                  {@Listener alive(Pbeer)}
-           end  
+         for CurConn in @Connections do
+             if (CurRefTime-CurConn.last_query)>=CurConn.period then
+                Pbeer = {PbeerList.retrievePbeer CurConn.id @Pbeers}
+                in
+                if Pbeer \= nil then
+                   IsInAlive = {PbeerList.isIn Pbeer @Alive}
+                   IsInNotified = {PbeerList.isIn Pbeer @Notified}
+                   NewTimeout
+                   NewConn = {NewCell CurConn}
+                   in 
+                   if IsInAlive andthen IsInNotified then
+                      Notified := {PbeerList.remove Pbeer @Notified}
+                      {@Listener alive(Pbeer)}
+                   end  
 
-           if {Not IsInAlive} andthen {Not IsInNotified} then
-                Notified := {PbeerList.add Pbeer @Notified}
-                {@Listener crash(Pbeer)}
-           end
-           %% Clear up and get ready for new ping round
-           Alive       := {PbeerList.remove Pbeer @Alive}
-           %if {List.length CurrentConnection.rtt_history} > 0 then
-           if {List.length CurrentConnection.rtt_history} >= @Buffer_Limit_k then
-           	NewTimeout = {CalculateTimeout CurrentConnection.rtt_history 
-                                                @Avg_Coeff_m1 @Std_Dev_Coeff_m2}
-           else
-                NewTimeout = INIT_TIMEOUT
-           end
-           {NewRound start(Pbeer NewTimeout)}
-        else
-           Connections := {PbeerList.remove CurrentConnection @Connections}   
-        end
+                   if {Not IsInAlive} andthen {Not IsInNotified} then
+                      Notified := {PbeerList.add Pbeer @Notified}
+                      {@Listener crash(Pbeer)}
+                   end
+                   %% Clear up and get ready for new ping round
+                   if IsInAlive then   
+                      Alive       := {PbeerList.remove Pbeer @Alive}
+                      %if {List.length CurrentConnection.rtt_history} > 0 then
+                      if {List.length CurConn.rtt_history} >= @Buffer_Limit_k then
+           	            NewTimeout = {CalculateTimeout CurConn.rtt_history 
+                                                                @Avg_Coeff_m1 @Std_Dev_Coeff_m2}
+                      else
+                            NewTimeout = INIT_TIMEOUT
+                      end
+                      NewConn := {Record.adjoinAt @NewConn period NewTimeout} 
+                      if NewTimeout<@MinTO then
+                          MinTO := NewTimeout
+                      end
+                  end
+                  NewConn := {Record.adjoinAt @NewConn last_query CurRefTime}
+                  Connections := {PbeerList.edit @NewConn @Connections}
+                  {ComLayer sendTo(Pbeer ping(@SelfPbeer timestamp:CurRefTime tag:fd) log:faildet)}
+                else
+                      Connections := {PbeerList.remove CurConn @Connections}   
+                end
+             end
+          end
+          if {List.length @Connections} >0 then
+            {TheTimer startTimer(@MinTO)}
+          else
+            TimerFlag:=false
+          end
       end
 
       proc {Ping ping(Pbeer timestamp:SentTime tag:fd)}
@@ -265,7 +287,6 @@ define
                   setComLayer:   SetComLayer
                   setFDParams:   SetFDParams
                   stopMonitor:   StopMonitor
-                  start:         NewRound
                   timeout:       Timeout
                   )
    in
@@ -276,6 +297,9 @@ define
 
       SelfPbeer   = {NewCell pbeer(id:~1 port:_)}
       TheTimer    = {Timer.new}
+
+      MinTO 	  = {NewCell INIT_TIMEOUT}
+      TimerFlag   = {NewCell false} 
 
       Buffer_Limit_k = {NewCell 30}
       Std_Dev_Coeff_m2 = {NewCell 4}

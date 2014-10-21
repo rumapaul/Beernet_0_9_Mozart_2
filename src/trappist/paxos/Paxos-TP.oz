@@ -123,11 +123,15 @@ define
       end
 
       proc {AckDecision Item}
-         {@MsgLayer dsend(to:@Leader.ref ack(key: Item.key
-                                             tid: NewItem.tid
-                                             tmid:@Leader.id
-                                             tp:  tp(id:Id ref:@NodeRef)
-                                             tag: trapp))}
+         AckMessage = ack(key: Item.key
+                          tid: NewItem.tid
+                          tp:  tp(id:Id ref:@NodeRef)
+                          tag: trapp)
+         in
+         {@MsgLayer dsend(to:@Leader.ref {Record.adjoinAt AckMessage tmid @Leader.id})}
+         for TM in RTMs do
+            {@MsgLayer dsend(to:TM.ref {Record.adjoinAt AckMessage tmid TM.id})}
+         end
          {Suicide} 
       end
 

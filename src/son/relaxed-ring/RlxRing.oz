@@ -192,18 +192,23 @@ define
 
       proc {Update CandidatePbeer}
         if {Not {PbeerList.isIn CandidatePbeer @Crashed}} then
+            %{System.showInfo "At:"#@Pred.id#"->"#@SelfRef.id#"->"#
+            %                         @Succ.id#" in Update:"#CandidatePbeer.id}
             if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id-1} then
                 OldSucc = @Succ.id
                 in
+                %{System.showInfo "At:"#@SelfRef.id#" in Update New Succ:"#CandidatePbeer.id#" Old Succ:"#@Succ.id}
 	        Succ := CandidatePbeer
                 {Monitor CandidatePbeer}
                 {@FingerTable monitor(CandidatePbeer)}
+                %{Zend @Succ fix(src:@SelfRef)}
                 if IS_VISUAL_DEBUG == 1 then
                      {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
                 end
             elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
                 OldPred = @Pred
                 in
+                 %{System.showInfo "At:"#@SelfRef.id#" in Update New Pred:"#CandidatePbeer.id#" Old Pred:"#@Pred.id}
                  PredList := {AddToList CandidatePbeer @PredList}
                  Pred := CandidatePbeer 
                  {Monitor CandidatePbeer}
