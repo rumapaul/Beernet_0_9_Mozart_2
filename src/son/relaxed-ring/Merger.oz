@@ -37,7 +37,7 @@
 
 functor
 import
-   System
+   %System
    Component   at '../../corecomp/Component.ozf'
    Timer       at '../../timer/Timer.ozf'
    PbeerQueue  at '../../utils/PbeerQueue.ozf'
