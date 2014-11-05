@@ -80,13 +80,16 @@ define
    end
 
    %% Remove a Peer from a List
+   %% Precondition: L is sorted
    fun {RemoveId PeerId L}
       case L
       of H|T then
          if H == PeerId then
             T
-         else
+         elseif H < PeerId then
             H|{RemoveId PeerId T}
+         else
+            L
          end
       [] nil then
          nil
