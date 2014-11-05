@@ -48,7 +48,7 @@ export
 
 define
 
-   Gamma       = 5000    % Granularity to trigger merger
+   Gamma       = 3000    % Granularity to trigger merger
    M           = Constants.mLookupsPerPeriod    % Number of MLookups in each period
    F           = Constants.fanout
 
@@ -69,13 +69,13 @@ define
 
       proc {Timeout timeout}
          proc {TriggerLookup I}
-            if {PbeerQueue.isEmpty @SelfQueue}==false andthen
+            if {Not {PbeerQueue.isEmpty @SelfQueue}} andthen
                 (I=<M orelse M==100) then
                 CurrentElement = {NewCell nil}
                 in
                 SelfQueue := {PbeerQueue.dequeue @SelfQueue CurrentElement}
                 case @CurrentElement of element(Q F) then
-                     {System.showInfo "Element:"#Q.id#" "#F#" "#@SelfPbeer.id}
+                     %{System.showInfo "Element:"#Q.id#" "#F#" "#@SelfPbeer.id}
                      {@Listener mlookup(src:@SelfPbeer id:Q fanout:F)} 
 		     {ComLayer sendTo(Q mlookup(src:@SelfPbeer
                                               id:@SelfPbeer fanout:F) log:rlxring)}
@@ -87,15 +87,15 @@ define
          end
          in
 
-         if {PbeerQueue.isEmpty @SelfQueue}==false then
+         if {Not {PbeerQueue.isEmpty @SelfQueue}} then
            {TriggerLookup 1}
          end
          {NewPeriod start}
       end 
 
       proc {MakeAQueueInsert makeAQueueInsert(P)}
-          if {PbeerQueue.isInQueue P @SelfQueue}==false then
-             {System.showInfo "Enqueuing an element:"#P.id#" F:"#F}
+          if {Not {PbeerQueue.isInQueue P @SelfQueue}} then
+             %{System.showInfo "Enqueuing an element:"#P.id#" F:"#F}
              SelfQueue := {PbeerQueue.enqueue element(P F) @SelfQueue}
           end
       end
