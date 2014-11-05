@@ -31,6 +31,7 @@ define
 
    fun {New}
       Self
+      Suicide
       %Listener
       DBs
       DBMakers = dbs(basic:SimpleDB secrets:SimpleSDB)
@@ -56,11 +57,22 @@ define
          DBs.DBid := NewDB
       end
 
+      proc {SignalDestroy Event}
+        AllEntries = {Dictionary.entries DBs}
+        in 
+	{List.forAll AllEntries
+            proc {$ _#I}
+	      {I Event} 
+            end}
+        {Suicide}
+      end
+
       Events = events(
                      %% Key/Value pairs
                      create:     Create
                      get:        Get
                      getCreate:  GetCreate
+                     signalDestroy: SignalDestroy
                      )
    in
       local
@@ -68,6 +80,7 @@ define
       in
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
+         Suicide  = FullComponent.killer
       end
 
       DBs      = {Dictionary.new}
