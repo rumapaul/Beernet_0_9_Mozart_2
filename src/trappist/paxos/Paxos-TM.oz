@@ -85,10 +85,17 @@ define
          fun {GetNewest L Newest}
             case L
             of H|T then
+               NewReaderList = {NewCell Newest.readers}
+               in
+               for P in H.readers do
+                   if {Not {IsInList @NewReaderList P}} then
+                         NewReaderList := P|@NewReaderList
+                   end
+               end
                if H.version > Newest.version then
-                  {GetNewest T H}
+                  {GetNewest T {Record.adjoinAt H readers @NewReaderList}}
                else
-                  {GetNewest T Newest}
+                  {GetNewest T {Record.adjoinAt Newest readers @NewReaderList}}
                end
             [] nil then
                Newest
@@ -97,13 +104,25 @@ define
                Newest
             end
          end
+         fun {IsInList L Peer}
+            case L
+             of H|T then
+                if H.id == Peer.id then
+                    true
+                else
+                    {IsInList T Peer}
+                end
+             [] nil then
+                false
+            end
+         end
       in
          MostItems = {@Replica getMajority(Key $ trapp)}
          RemoteItem = {GetNewest MostItems item(key:     Key
-                                                secret:  NO_SECRET
-                                                value:   'NOT_FOUND'
-                                                version: 0
-                                                readers: nil)}
+                                    		secret:  NO_SECRET
+                                    		value:   'NOT_FOUND'
+                                    		version: 0
+                                    		readers: nil)}         
          Item = {Record.adjoinAt RemoteItem op read}
          LocalStore.Key := Item 
          Item
@@ -215,23 +234,27 @@ define
 
          	%% Initiate TPs per each item. Ask them to vote
         	 for I in {Dictionary.items LocalStore} do
-            		{@Replica bulk(to:{Utils.hash I.key @MaxKey}
-                           		brew(leader:  @Leader
-                                	rtms:    @RTMs
-                                	tid:     Tid
-                                	item:    I
-                                	protocol:paxos
-                                	tag:     trapp
-                                	))} 
-            		Votes.(I.key)  := nil
-            		Acks.(I.key)   := nil
-            		TPs.(I.key)    := nil
-            		VotesAcks.(I.key) := nil
+                        if I.op==write then
+            		   {@Replica bulk(to:{Utils.hash I.key @MaxKey}
+                           			brew(leader:  @Leader
+                           		     	rtms:    @RTMs
+                           		     	tid:     Tid
+                           		     	item:    I
+                           		     	protocol:paxos
+                           		     	tag:     trapp
+                           		     	))} 
+            	            Votes.(I.key)  := nil
+            		    Acks.(I.key)   := nil
+            		    TPs.(I.key)    := nil
+            	 	    VotesAcks.(I.key) := nil
+                        end
          	end
          	%% Open VotingPolls and launch timers
          	for I in {Dictionary.items LocalStore} do
-            		VotingPolls.(I.key) := open
-            		{TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
+                        if I.op==write then
+            		   VotingPolls.(I.key) := open
+            		   {TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
+                        end
          	end
 	end
       end
@@ -294,7 +317,16 @@ define
 
      proc {CheckTermination IsTimeout}
         if {EnoughTPacks {Dictionary.keys Acks}} orelse IsTimeout then
-           try
+           if FinalDecision==commit then
+              for I in {Dictionary.items LocalStore} do
+                  if I.op==write then
+                      for Peer in I.readers do
+                        {@MsgLayer dsend(to:Peer notifyReaderUpdate(key:I.key val:I.value tag:trapp))}
+                      end
+                  end
+              end
+          end
+          try
              {Port.send Client FinalDecision}
            catch _ then
              %% TODO: improve exception handling
@@ -313,11 +345,13 @@ define
 
      proc {DiscardAllVotes}
 	for I in {Dictionary.items LocalStore} do
+             if I.op==write then
 		Votes.(I.key)  := nil
             	Acks.(I.key)   := nil
             	TPs.(I.key)    := nil
             	VotesAcks.(I.key) := nil
                 VotingPolls.(I.key)  := open
+             end
         end
      end
 
@@ -328,6 +362,15 @@ define
          if @Leader\=noref andthen @Leader.id==Id then 
             {CheckTermination false}
          end
+      end
+
+      proc {AckNewReader ackNewReader(key:Key tp:TP tid:_ tmid:_ tag:trapp)}
+         Acks.Key := TP | Acks.Key
+         if {List.length Acks.Key} >= @RepFactor div 2 then
+            {Send Client subscribed}
+            {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
+            {Suicide}
+         end 
       end
 
       proc {Vote FullVote}
@@ -414,7 +457,9 @@ define
          RTMs := TheRTMs
          TMRank := Rank
          for I in {Dictionary.items LocalStore} do
-            {TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
+            if I.op==write then
+               {TheTimer startTrigger(@VotingPeriod timeoutPoll(I.key))}
+            end
          end
       end
 
@@ -586,6 +631,18 @@ define
          end
       end
 
+      proc {BecomeReader becomeReader(k:Key)}
+         {@Replica bulk(to:{Utils.hash Key @MaxKey}
+                           		newReader(leader:     @Leader
+                                	          tid:        Tid
+                                	          readerpeer: @NodeRef
+                                                  itemkey:    Key
+                                	          protocol:   paxos
+                                	          tag:        trapp))}
+         Acks.Key   := nil 
+         {TheTimer startTrigger((2*@VotingPeriod) timeoutReaderAcks(Key))}
+      end
+
       %% --- Various --------------------------------------------------------
 
       proc {GetId getId(I)}
@@ -640,6 +697,14 @@ define
                 %{System.showInfo "Timeout to receive Acks"}
          	{CheckTermination true}
          end
+      end
+
+      proc {TimeoutReaderAcks timeoutReaderAcks(Key)}
+         if {List.length Acks.Key} < @RepFactor div 2 then
+            {Send Client failed}
+            {@Listener deleteTM(tid:Tid tmid:Id tag:trapp)}
+            {Suicide}
+         end 
       end
 
       proc {TimeoutLeader timeoutLeader}
@@ -853,7 +918,7 @@ define
                {StartRound (@CurrentRound mod @RepFactor)+1}
            else
                for RTM in @Suspected do
-                  if RTM.ref.id == @Leader.ref.id then
+                  if RTM\=noref andthen @Leader\=noref andthen RTM.ref.id == @Leader.ref.id then
                        {StartRound (@Leader.rank mod @RepFactor)+1}
                   end
                end
@@ -872,6 +937,7 @@ define
                      erase:         PreErase
                      read:          PreRead
                      write:         PreWrite
+                     becomeReader:  BecomeReader
                      %% Interaction with rTMs
                      initRTM:       InitRTM
                      registerRTM:   RegisterRTM
@@ -885,6 +951,7 @@ define
                      %% Interaction with TPs
                      ack:           Ack
                      vote:          Vote
+                     ackNewReader:  AckNewReader
                      %% Various
                      getId:         GetId
                      getTid:        GetTid
@@ -896,6 +963,7 @@ define
                      timeoutRTMs:   TimeoutRTMs
                      timeoutRTMResponse: TimeoutRTMResponse
                      timeoutAcks:	 TimeoutAcks
+                     timeoutReaderAcks:  TimeoutReaderAcks
                      isATMCrashed:  IsATMCrashed
                      askRTMResponse: AskRTMResponse
                      aRTMResponse:   ARTMResponse
