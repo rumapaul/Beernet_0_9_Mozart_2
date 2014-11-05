@@ -90,6 +90,7 @@ define
       Listener    % Component where the deliver messages will be triggered
       Logger      % Component to log every sent and received message  (R)
       Timer       % Component to rigger some events after the requested time
+      Suicide     
 
       Args
       FirstAck    % One shoot acknowledgement for first join
@@ -192,23 +193,21 @@ define
 
       proc {Update CandidatePbeer}
         if {Not {PbeerList.isIn CandidatePbeer @Crashed}} then
-            %{System.showInfo "At:"#@Pred.id#"->"#@SelfRef.id#"->"#
-            %                         @Succ.id#" in Update:"#CandidatePbeer.id}
-            if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id-1} then
+            if {BelongsTo CandidatePbeer.id @SelfRef.id @Succ.id} andthen 
+               CandidatePbeer.id\=@Succ.id then
                 OldSucc = @Succ.id
                 in
-                %{System.showInfo "At:"#@SelfRef.id#" in Update New Succ:"#CandidatePbeer.id#" Old Succ:"#@Succ.id}
 	        Succ := CandidatePbeer
                 {Monitor CandidatePbeer}
                 {@FingerTable monitor(CandidatePbeer)}
-                %{Zend @Succ fix(src:@SelfRef)}
+                {Zend @Succ fix(src:@SelfRef)}
                 if IS_VISUAL_DEBUG == 1 then
                      {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
                 end
-            elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id-1} then
+            elseif {BelongsTo CandidatePbeer.id @Pred.id @SelfRef.id} andthen
+                   CandidatePbeer.id\=@Pred.id then
                 OldPred = @Pred
                 in
-                 %{System.showInfo "At:"#@SelfRef.id#" in Update New Pred:"#CandidatePbeer.id#" Old Pred:"#@Pred.id}
                  PredList := {AddToList CandidatePbeer @PredList}
                  Pred := CandidatePbeer 
                  {Monitor CandidatePbeer}
@@ -266,8 +265,6 @@ define
             %     {@Logger event(@SelfRef.id succChanged(@Succ.id OldSucc) color:green)}
             %end
             %{@Logger stat(src:@SelfRef.id new:@Succ.id msg:inconsistency pointer:succ)}
-         %else
-         %   {MakeAQueueInsert makeAQueueInsert(Pbeer)}
          end 
       end
 
@@ -442,6 +439,12 @@ define
          skip
       end
 
+     proc {SignalDestroy Event}
+         %{SelfStabilizer signalDestroy}
+         %{SelfMerger signalDestroy}
+         {Suicide}
+     end
+
       proc {Join Event}
          Src = Event.src
  	 SrcRing = Event.ring 
@@ -541,7 +544,7 @@ define
       end
 
      proc {MakeAQueueInsert Event}
-         %{SelfMerger Event}
+        %{SelfMerger Event}
 	skip
      end
 
@@ -561,7 +564,7 @@ define
             end
          end
          {Update Target}
-         {System.showInfo "In MLookup Merger:"#Target.id#" Fanout:"#F}
+         %{System.showInfo "In MLookup Merger:"#Target.id#" Fanout:"#F}
       end
 
       proc {NewSucc newSucc(newSucc:NewSucc succList:NewSuccList)}
@@ -642,6 +645,13 @@ define
       end
 
       proc {Stabilize stabilize}
+         /*if @Succ.id==@SelfRef.id then
+            PSucc = {RingList.getFirst @SuccList @SelfRef}
+            in
+            if PSucc.id \= @SelfRef.id then
+              {System.showInfo "I am my successor and have a candidate on succ list!!"}
+            end
+         end*/
          {Zend @Succ retrievePred(src:@SelfRef
                                   psucc:@Succ)}
       end
@@ -689,6 +699,7 @@ define
                   hint:          Hint
                   idInUse:       IdInUse
                   init:          Init
+                  signalDestroy: SignalDestroy
                   join:          Join
                   joinLater:     JoinLater
                   joinOk:        JoinOk
@@ -720,6 +731,7 @@ define
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
          Listener = FullComponent.listener
+         Suicide  = FullComponent.killer
       end
       Timer = {TimerMaker.new}
       ComLayer = {NewCell {Network.new}}
