@@ -38,6 +38,7 @@ import
    TwoPhaseTP     at 'twophase/TwoPhase-TP.ozf'
    ValueSetTM     at 'valueset/ValueSet-TM.ozf'
    ValueSetTP     at 'valueset/ValueSet-TP.ozf'
+   Timer          at '../timer/Timer.ozf'
 export
    New
 define
@@ -47,6 +48,7 @@ define
    fun {New CallArgs}
       Self
       Listener
+      Suicide
       MsgLayer
       NodeRef
       Replica
@@ -58,6 +60,8 @@ define
       PairsDB
       SetsDB
       MaxKey
+
+      TheTimer
 
       TMmakers = tms(eagerpaxos: EagerPaxosTM
                      paxos:      PaxosTM
@@ -108,7 +112,29 @@ define
       %% --- Trappist API ---------------------------------------------------
 
       proc {BecomeReader Event}
-         skip
+         Key = Event.1
+         TM
+         P S
+         in
+         P = {NewPort S}
+         TM = {TMmakers.paxos.new args(role:leader
+                                       client:P
+                                       maxKey:@MaxKey)}
+         {TM setMsgLayer(@MsgLayer)}
+         {TM setReplica(@Replica)}
+         {TM setListener(Self)}
+         {AddTransObj TMs {TM getTid($)} {TM getId($)} TM}
+         {TM becomeReader(k:Key)}
+         {Wait S.1}
+         if S.1==failed then 
+            if {Not {HasFeature Event tries}} then
+                 {TheTimer startTrigger(5000 {Record.adjoinAt Event tries 1})}
+            else
+               if Event.tries<3 then
+                 {TheTimer startTrigger(5000 {Record.adjoinAt Event tries (Event.tries+1)})}
+               end
+            end
+         end
       end
 
       proc {GetLocks Event}
@@ -152,7 +178,6 @@ define
 
       %% --- For the TMs ----------------------------------------------------
       proc {DeleteTM Event}
-         %{System.showInfo "Reached Delete Procedure"}
          {RemoveTransObj TMs Event.tid Event.tmid}
       end
 
@@ -215,6 +240,10 @@ define
                         end}
       end
 
+      proc {NotifyReaderUpdate notifyReaderUpdate(key:K val:V tag:trapp)}
+         {@Listener clientEvents(msg:update(K V))}
+      end
+
       %% --- For the TPs ----------------------------------------------------
       proc {Brew Event}
          Tid = Event.tid
@@ -243,10 +272,20 @@ define
          in
          TPObj = {Dictionary.condGet TPs (Event.tid) objs}
          if {HasFeature TPObj (Event.tpid)} then
-            %{System.showInfo "Leader Changed. Going to abort and kill tp"}
             {TPObj.(Event.tpid) leaderChanged}
             {RemoveTransObj TPs Event.tid Event.tpid}
          end
+      end
+
+      proc {NewReader Event}
+         Tid = Event.tid
+         Protocol = Event.protocol
+         TP
+         in
+         TP = {TPmakers.Protocol.new args(tid:Tid)} 
+         {TP setMsgLayer(@MsgLayer)}
+         {TP setDB(DBs.Protocol)}
+         {TP Event}
       end
 
       %% --- Data Management ------------------------------------------------
@@ -367,6 +406,12 @@ define
         end
       end
 
+      proc {SignalDestroy Event}
+        {ApplyEventAllTransObj TMs Event}
+        {ApplyEventAllTransObj TPs Event}
+        {Suicide}
+      end
+
       Events = events(
                      %% Trappist's API
                      becomeReader:  BecomeReader
@@ -395,10 +440,13 @@ define
                      destroyRTM:    DestroyRTM
                      askRTMResponse: AskRTMResponse
                      aRTMResponse:  ForwardToTM
+                     ackNewReader:  ForwardToTM
+                     notifyReaderUpdate: NotifyReaderUpdate
                      %% For the TPs
                      brew:          Brew
                      final:         Final
                      leaderChanged: LeaderChanged
+                     newReader:     NewReader
                      %% Data management
                      insertData:    InsertData
                      insertDataAttempt: InsertDataAttempt
@@ -411,6 +459,7 @@ define
                      %setTimeout:    SetTimeout
                      %timeout:       TimeoutEvent
 		     nodeCrash:	     HandleNodeCrash
+                     signalDestroy:  SignalDestroy
                      )
 
    in
@@ -420,10 +469,14 @@ define
          FullComponent  = {Component.new Events}
          Self     = FullComponent.trigger
          Listener = FullComponent.listener
+         Suicide = FullComponent.killer
       end
       NodeRef  = {NewCell noref}
       MsgLayer = {NewCell Component.dummy}
       Replica  = {NewCell Component.dummy}
+
+      TheTimer    = {Timer.new}
+      {TheTimer setListener(Self)}
 
       TMs      = {Dictionary.new}
       TPs      = {Dictionary.new}

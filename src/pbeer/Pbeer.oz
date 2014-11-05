@@ -71,6 +71,10 @@ define
          {Port.send Inbox Event}
       end
 
+      proc {ClientEvents Event}
+         {Port.send Inbox Event.msg}
+      end
+
       proc {Broadcast Event}
 %         broadcast(Range Msg) = Event
 %      in
@@ -79,6 +83,11 @@ define
       
       proc {InjectPermFail injectPermFail}
          {@Node injectPermFail}
+         {@Trappist signalDestroy}
+         {@Replica signalDestroy}
+         {@DHT signalDestroy}
+         {@DBMan signalDestroy}
+         {@MsgLayer signalDestroy}
       end
       
       proc {Join join(RingRef)}
@@ -282,6 +291,7 @@ define
 
       Events = events(
                      any:              Any
+                     clientEvents:     ClientEvents
                      broadcast:        Broadcast
                      dsend:            SendTagged
                      getFullRef:       ToNode

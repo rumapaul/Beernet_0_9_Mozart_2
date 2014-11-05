@@ -118,7 +118,12 @@ define
       end
 
       proc {PutItemAndAck Item}
-         {@DB put(NewItem.hkey Item.key {Record.adjoinAt Item locked false})}
+         DBItem
+         ItemToUpload
+         in
+         DBItem      = {@DB get(NewItem.hkey Item.key $)}
+         ItemToUpload = {Record.adjoinAt Item readers DBItem.readers}
+         {@DB put(NewItem.hkey Item.key {Record.adjoinAt ItemToUpload locked false})}
          {AckDecision Item}
       end
 
@@ -147,6 +152,43 @@ define
          {Suicide} 
       end
 
+      proc {NewReader newReader(hkey:   HKey
+                      leader: TheLeader
+                      tid:    Tid
+                      readerpeer: ReaderPeer
+                      itemkey: Key 
+                      protocol:_ 
+                      tag:trapp)}
+          DBItem
+          NewReaders
+          fun {IsInList L Peer}
+            case L
+             of H|T then
+                if H.id == Peer.id then
+                    true
+                else
+                    {IsInList T Peer}
+                end
+             [] nil then
+                false
+            end
+          end
+          in
+          DBItem      = {@DB get(HKey Key $)}
+          if DBItem \= NOT_FOUND andthen DBItem.value \= NO_VALUE andthen {Not DBItem.locked} then
+             if {Not {IsInList DBItem.readers ReaderPeer}} then
+                NewReaders = ReaderPeer|(DBItem.readers)
+                {@DB put(HKey Key {Record.adjoinAt DBItem readers NewReaders})}
+             end
+             {@MsgLayer dsend(to:TheLeader.ref ackNewReader(key: Key
+                                                            tmid: TheLeader.id
+                                                            tid: Tid
+                                                            tp:  tp(id:Id ref:@NodeRef)
+                                                            tag: trapp))}          
+          end
+          {Suicide}     
+     end
+
       %% --- Various --------------------------------------------------------
 
       proc {GetId getId(I)}
@@ -168,6 +210,7 @@ define
                      abort:         Abort
                      commit:        Commit
                      leaderChanged: LeaderChanged
+                     newReader:     NewReader
                      %% Various
                      getId:         GetId
                      setDB:        SetDB

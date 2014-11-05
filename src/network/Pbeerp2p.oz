@@ -65,6 +65,7 @@ define
       Self        % Full Component
       SelfId      % Id that can be assinged by a external component
       SelfPort    % Reference to the port of the low level communication layer
+      Suicide
 
       FailedLinks   % List of Failed Links  (R)
       
@@ -122,8 +123,8 @@ define
          if Dest\=nil then
              %Turn-on this code block if #of messages is required for stat
              %if Constants.isVisual == 0 then 
-             	%{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
-            % end
+             %	{@Logger out(src:@SelfId n:MsgId dest:Dest.id msg:Msg tag:LogTag)}
+             %end
 	     %{@Logger out(MsgId @SelfId {ThisThreadId} Dest.id color:blue)}
              if {Not {PbeerIdList.isIdIn Dest.id @FailedLinks}} then
                 {@ComLayer pp2pSend(Dest '#'(@SelfId MsgId Msg))}
@@ -152,6 +153,11 @@ define
          FailedLinks := {PbeerIdList.removeId TargetId @FailedLinks}
       end
 
+     proc {SignalDestroy Event}
+        {@ComLayer signalDestroy}
+        {Suicide}
+     end
+
      proc {FwdEventsToComLayer Event}
          {@ComLayer Event}
      end
@@ -166,6 +172,7 @@ define
                   setLogger:     SetLogger
                   signalALinkFailure: SignalALinkFailure
                   signalALinkRestore: SignalALinkRestore
+                  signalDestroy:  SignalDestroy
                   %injectLinkDelay: FwdEventsToComLayer
                   %injectLowLinkDelay: FwdEventsToComLayer
                   %injectNoLinkDelay:  FwdEventsToComLayer
@@ -181,6 +188,7 @@ define
       SelfPort    = {@ComLayer getPort($)}
       SelfId      = {NewCell none}
       Listener    = Self.listener
+      Suicide     = Self.killer
       {@ComLayer setListener(Self.trigger)}
       Self.trigger
    end
